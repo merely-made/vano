@@ -22,11 +22,12 @@ console = "0.16.3"
 ctrlc = "3.5.2"
 ecmascript_atomics = { path = "support/ecmascript_atomics", version = "0.2.3" }
 fast-float = "0.2.0"
-# Genet fork: upstream now also lands on 0.17.1, but pins it exactly. We keep a
-# caret so the Genet workspace can unify on whatever hashbrown Boa floors at
-# (currently 0.17.1); an `=` pin here would break that unification the moment
-# boa moves. Nova's `=` pins are a uniform reproducibility style, not a
-# hashbrown-specific constraint.
+# Genet fork: upstream pins hashbrown exactly; we keep a caret so the Genet
+# workspace can unify on whatever hashbrown Boa floors at (currently 0.17.1).
+# Since 2026-09-12 every requirement in this table is a caret for the same
+# reason: upstream Nova's uniform `=` pins conflicted with the caret ranges the
+# rest of the stack uses (mere could not resolve `rand`), and reproducibility
+# lives in each consumer's lock, not here.
 hashbrown = "0.17.1"
 lexical = { version = "7.0.5", default-features = false, features = [
     "std",
@@ -50,7 +51,7 @@ rand = "0.10.1"
 regex = "1.12.3"
 # Genet fork: Nova's RegExp matcher uses regress (the ECMAScript-spec backtracking
 # engine) instead of the `regex` crate, which cannot do lookahead/lookbehind/
-# backreferences. Pinned to the version Boa uses in the Genet workspace so the
+# backreferences. Kept on the version Boa uses in the Genet workspace so the
 # ecosystem shares one regress.
 regress = { version = "0.11.1", features = ["utf16"] }
 ryu-js = "1.0.2"
