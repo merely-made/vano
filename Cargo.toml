@@ -15,53 +15,53 @@ categories = ["development-tools"]
 authors = ["The Nova Team"]
 
 [workspace.dependencies]
-ahash = { version = "=0.8.12", default-features = false }
-clap = { version = "=4.6.0", features = ["derive"] }
-cliclack = "=0.5.4"
-console = "=0.16.3"
-ctrlc = "=3.5.2"
-ecmascript_atomics = { path = "support/ecmascript_atomics", version = "=0.2.3" }
-fast-float = "=0.2.0"
+ahash = { version = "0.8.12", default-features = false }
+clap = { version = "4.6.0", features = ["derive"] }
+cliclack = "0.5.4"
+console = "0.16.3"
+ctrlc = "3.5.2"
+ecmascript_atomics = { path = "support/ecmascript_atomics", version = "0.2.3" }
+fast-float = "0.2.0"
 # Genet fork: upstream now also lands on 0.17.1, but pins it exactly. We keep a
 # caret so the Genet workspace can unify on whatever hashbrown Boa floors at
 # (currently 0.17.1); an `=` pin here would break that unification the moment
 # boa moves. Nova's `=` pins are a uniform reproducibility style, not a
 # hashbrown-specific constraint.
 hashbrown = "0.17.1"
-lexical = { version = "=7.0.5", default-features = false, features = [
+lexical = { version = "7.0.5", default-features = false, features = [
     "std",
     "write-integers",
     "write-floats",
     "radix",
 ] }
-num-bigint = "=0.4.6"
-num-traits = "=0.2.19"
-oxc-miette = { version = "=2.7.1", features = ["fancy"] }
-oxc_allocator = "=0.124.0"
-oxc_ast = "=0.124.0"
-oxc_diagnostics = "=0.124.0"
-oxc_ecmascript = "=0.124.0"
-oxc_parser = "=0.124.0"
-oxc_regular_expression = "=0.124.0"
-oxc_semantic = "=0.124.0"
-oxc_span = "=0.124.0"
-oxc_syntax = "=0.124.0"
-rand = "=0.10.1"
-regex = "=1.12.3"
+num-bigint = "0.4.6"
+num-traits = "0.2.19"
+oxc-miette = { version = "2.7.1", features = ["fancy"] }
+oxc_allocator = "0.124.0"
+oxc_ast = "0.124.0"
+oxc_diagnostics = "0.124.0"
+oxc_ecmascript = "0.124.0"
+oxc_parser = "0.124.0"
+oxc_regular_expression = "0.124.0"
+oxc_semantic = "0.124.0"
+oxc_span = "0.124.0"
+oxc_syntax = "0.124.0"
+rand = "0.10.1"
+regex = "1.12.3"
 # Genet fork: Nova's RegExp matcher uses regress (the ECMAScript-spec backtracking
 # engine) instead of the `regex` crate, which cannot do lookahead/lookbehind/
 # backreferences. Pinned to the version Boa uses in the Genet workspace so the
 # ecosystem shares one regress.
 regress = { version = "0.11.1", features = ["utf16"] }
-ryu-js = "=1.0.2"
-soavec = "=0.2.0"
-soavec_derive = "=0.2.0"
-sonic-rs = "=0.5.8"
-unicode-normalization = "=0.1.25"
-usdt = "=0.6.0"
-wtf8 = "=0.1.0"
-xsum = "=0.1.6"
-temporal_rs = "=0.2.4"
+ryu-js = "1.0.2"
+soavec = "0.2.0"
+soavec_derive = "0.2.0"
+sonic-rs = "0.5.8"
+unicode-normalization = "0.1.25"
+usdt = "0.6.0"
+wtf8 = "0.1.0"
+xsum = "0.1.6"
+temporal_rs = "0.2.4"
 
 [workspace.metadata.dylint]
 libraries = [{ path = "nova_lint" }]

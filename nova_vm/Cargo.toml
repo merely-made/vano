@@ -45,7 +45,7 @@ temporal_rs = { workspace = true, optional = true }
 [target.'cfg(target_family = "wasm")'.dependencies]
 ahash = { workspace = true, features = ["std"] }
 ecmascript_atomics = { workspace = true, optional = true, features = ["single-threaded"] }
-getrandom_04 = { package = "getrandom", version = "=0.4.3", features = ["wasm_js"] }
+getrandom_04 = { package = "getrandom", version = "0.4.3", features = ["wasm_js"] }
 
 # USDT emits native architecture-specific probes and has no WebAssembly target.
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
