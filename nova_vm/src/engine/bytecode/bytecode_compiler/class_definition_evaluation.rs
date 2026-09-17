@@ -656,11 +656,17 @@ impl<'a, 's, 'gc, 'scope> CompileEvaluation<'a, 's, 'gc, 'scope> for ast::Class<
                         is_strict: true,
                         ast: FunctionAstRef::ClassConstructor(&constructor.value),
                     };
-                    body_ctx.compile_function_body(constructor_data);
+                    // The slot must be reserved before the body is compiled:
+                    // class definitions nested inside the constructor push
+                    // their own default-constructor initializer entries into
+                    // the same `class_initializer_bytecodes` vec while the
+                    // body compiles, so index 0 is only ours if we claim it
+                    // first. `EvaluateSuper` reads the entry at index 0.
                     body_ctx.add_class_initializer_bytecode(
                         initializer_executable,
                         has_constructor_parent,
                     );
+                    body_ctx.compile_function_body(constructor_data);
                     let body_executable = body_ctx.finish();
                     ctx.set_function_expression_bytecode(constructor_index, body_executable);
                 } else {
