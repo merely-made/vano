@@ -59,3 +59,50 @@ class G {
 if (new G().g !== 42) {
   throw new Error('expected new G().g === 42')
 }
+// Nested classes inside a derived constructor must not displace the
+// deferred field-initializer entry: the compiler reserves slot 0 of the
+// body executable's class_initializer_bytecodes for it before compiling
+// the body, and EvaluateSuper reads slot 0.
+
+// Variant 1: nested base class with fields and an implicit constructor
+// (its default-constructor initializer entry is appended after ours).
+class P extends A {
+  p = 'p-field'
+  constructor() {
+    class InnerWithDefault {
+      inner = 7
+    }
+    if (new InnerWithDefault().inner !== 7) {
+      throw new Error('expected inner === 7')
+    }
+    super()
+  }
+}
+if (new P().p !== 'p-field') {
+  throw new Error('expected p === "p-field"')
+}
+
+// Variant 2: nested derived class with its own user constructor and
+// fields (its deferred initializer lives at slot 0 of its own body
+// executable, one level down).
+class Q extends A {
+  q = 'q-field'
+  constructor() {
+    const Nested = class extends A {
+      nested = 'nested-field'
+      constructor() { super() }
+    }
+    const inner = new Nested()
+    if (inner.nested !== 'nested-field') {
+      throw new Error('expected nested === "nested-field"')
+    }
+    super()
+    if (this.q !== 'q-field') {
+      throw new Error('expected this.q === "q-field" inside constructor')
+    }
+  }
+}
+const q = new Q()
+if (q.q !== 'q-field') {
+  throw new Error('expected q.q === "q-field"')
+}
