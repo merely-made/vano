@@ -2753,7 +2753,8 @@ pub(crate) fn initialize_instance_elements<'a>(
 /// For a user-written derived class constructor that has instance fields
 /// declared on the class, the field initializers must not run before
 /// `super()` (because `this` is uninitialized at that point). The compiler
-/// stores them as a separate executable on the function. This helper runs
+/// stores them as the body executable's `class_initializer_bytecodes[0]`
+/// entry (a slot already present on `ExecutableHeapData`). This helper runs
 /// that executable in a new function environment where `this` is bound to
 /// the constructed instance, mirroring the behaviour of
 /// [`initialize_instance_elements`] for built-in default constructors.
@@ -2764,12 +2765,24 @@ pub(crate) fn initialize_ecmascript_function_class_field_initializers<'a>(
     gc: GcScope<'a, '_>,
 ) -> JsResult<'a, ()> {
     // Read everything we need before mutating the agent.
-    let bytecode = f.get(agent).class_field_initializer_bytecode;
-    let bytecode = match bytecode {
-        Some(b) => b.unbind(),
-        None => return Ok(()),
-    };
     let f = f.bind(gc.nogc());
+    // The body executable's `class_initializer_bytecodes` always has the
+    // deferred field initializer at index 0 when one was emitted at compile
+    // time. For constructors without deferred initializers the slot is
+    // empty.
+    let body_executable = f.get(agent).compiled_bytecode;
+    let bytecode = body_executable
+        .and_then(|body_exe| {
+            body_exe
+                .get(agent)
+                .class_initializer_bytecodes
+                .first()
+                .copied()
+        })
+        .and_then(|(init, _)| init);
+    let Some(bytecode) = bytecode else {
+        return Ok(());
+    };
     let outer_env = f.get(agent).ecmascript_function.environment;
     let outer_priv_env = f.get(agent).ecmascript_function.private_environment;
     let source_code = f.get(agent).ecmascript_function.source_code;
