@@ -1220,12 +1220,10 @@ pub(super) fn execute_class_define_constructor<'gc>(
     let FunctionExpression {
         expression,
         compiled_bytecode,
-        class_field_initializer_bytecode,
         ..
     } = executable.fetch_function_expression(agent, instr.get_first_index(), gc.nogc());
     let function_expression = expression.get();
     let compiled_bytecode = *compiled_bytecode;
-    let class_field_initializer_bytecode = *class_field_initializer_bytecode;
     let has_constructor_parent = instr.get_second_bool();
 
     let function_prototype = if has_constructor_parent {
@@ -1253,10 +1251,6 @@ pub(super) fn execute_class_define_constructor<'gc>(
     let function = ordinary_function_create(agent, params, gc.nogc());
     if let Some(compiled_bytecode) = compiled_bytecode {
         function.get_mut(agent).compiled_bytecode = Some(compiled_bytecode.unbind());
-    }
-    if let Some(class_field_initializer_bytecode) = class_field_initializer_bytecode {
-        function.get_mut(agent).class_field_initializer_bytecode =
-            Some(class_field_initializer_bytecode.unbind());
     }
     set_function_name(agent, function, class_name.into(), None, gc.nogc());
     make_constructor(agent, function, Some(false), Some(proto), gc.nogc());
@@ -1772,8 +1766,7 @@ pub(super) fn execute_evaluate_super<'gc>(
         result.unbind().bind(gc.nogc())
     };
     // 7. Let thisER be GetThisEnvironment().
-    let this_er = get_this_environment(agent, gc.nogc());
-    let Environment::Function(this_er) = this_er else {
+    let Environment::Function(this_er) = get_this_environment(agent, gc.nogc()) else {
         unreachable!();
     };
     // 8. Perform ? thisER.BindThisValue(result).
@@ -1790,8 +1783,10 @@ pub(super) fn execute_evaluate_super<'gc>(
     // 11. Perform ? InitializeInstanceElements(result, F).
     // For a user-written derived class constructor with instance fields
     // declared on the class, the field initializers must run after `super()`
-    // has bound `this`. They are stored on the function as a separate
-    // executable and invoked here.
+    // has bound `this`. The compiler attaches the deferred initializer
+    // bytecode to the constructor body's `compiled_bytecode` Executable via
+    // its `class_initializer_bytecodes` slot (a slot already present on
+    // `ExecutableHeapData`), and it is invoked here.
     let result_object_unbound = result.unbind();
     initialize_ecmascript_function_class_field_initializers(
         agent,

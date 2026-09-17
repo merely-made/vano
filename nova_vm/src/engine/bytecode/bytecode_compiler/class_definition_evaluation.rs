@@ -639,8 +639,9 @@ impl<'a, 's, 'gc, 'scope> CompileEvaluation<'a, 's, 'gc, 'scope> for ast::Class<
                 // For a user-written constructor on a derived class, the
                 // instance field initializers cannot run before `super()`
                 // because `this` is uninitialized at that point. Build the
-                // prelude as a separate executable and register it so it
-                // runs from `EvaluateSuper` step 11 after `super()` has
+                // prelude as a separate executable and attach it to the
+                // body executable's `class_initializer_bytecodes`. It is then
+                // invoked from `EvaluateSuper` step 11 after `super()` has
                 // bound `this`. For base classes the existing
                 // prelude-inside-body approach is preserved because
                 // `OrdinaryCallBindThis` runs before the user body and so
@@ -656,11 +657,11 @@ impl<'a, 's, 'gc, 'scope> CompileEvaluation<'a, 's, 'gc, 'scope> for ast::Class<
                         ast: FunctionAstRef::ClassConstructor(&constructor.value),
                     };
                     body_ctx.compile_function_body(constructor_data);
-                    let body_executable = body_ctx.finish();
-                    ctx.set_function_expression_class_field_initializer_bytecode(
-                        constructor_index,
+                    body_ctx.add_class_initializer_bytecode(
                         initializer_executable,
+                        has_constructor_parent,
                     );
+                    let body_executable = body_ctx.finish();
                     ctx.set_function_expression_bytecode(constructor_index, body_executable);
                 } else {
                     let constructor_data = CompileFunctionBodyData {
@@ -882,7 +883,6 @@ fn define_constructor_method(
             // CompileContext holds a name identifier for us if this is NamedEvaluation.
             identifier: None,
             compiled_bytecode: None,
-            class_field_initializer_bytecode: None,
         },
         has_constructor_parent.into(),
     )
@@ -944,7 +944,6 @@ fn define_method<'s>(
             // Note: method name is always found in the result register.
             identifier: Some(NamedEvaluationParameter::Result),
             compiled_bytecode: None,
-            class_field_initializer_bytecode: None,
         },
         // enumerable: false,
         false.into(),
@@ -1028,7 +1027,6 @@ fn define_private_method<'s>(
             }),
             identifier: Some(NamedEvaluationParameter::Result),
             compiled_bytecode: None,
-            class_field_initializer_bytecode: None,
         },
         immediate.into(),
     );
