@@ -11,11 +11,11 @@ use oxc_ast::ast;
 
 use crate::{
     ecmascript::{
-        Agent, Array, BUILTIN_STRING_MEMORY, InternalMethods, InternalSlots, OrdinaryObject,
-        String, Value, array_create, unwrap_try,
+        Agent, Array, BUILTIN_STRING_MEMORY, InternalMethods, PropertyDescriptor, String, Value,
+        array_create, unwrap_try,
     },
     engine::{Bindable, NoGcScope},
-    heap::{ElementDescriptor, ObjectEntry, ObjectEntryPropertyDescriptor},
+    heap::ElementDescriptor,
 };
 
 /// ### [13.2.8.4 GetTemplateObject ( templateLiteral )](https://tc39.es/ecma262/#sec-gettemplateobject)
@@ -136,30 +136,21 @@ pub(super) fn get_template_object<'a>(
     }
     // 13. Perform ! SetIntegrityLevel(rawObj, frozen).
     unwrap_try(raw_obj.try_prevent_extensions(agent, gc));
-    let prototype = template.internal_prototype(agent).unwrap();
     // 14. Perform ! DefinePropertyOrThrow(template,
-    let template_backing_object = OrdinaryObject::create_object(
+    let defined = unwrap_try(template.try_define_own_property(
         agent,
-        Some(prototype),
-        &[ObjectEntry {
-            // "raw",
-            key: BUILTIN_STRING_MEMORY.raw.to_property_key(),
-            // PropertyDescriptor {
-            value: ObjectEntryPropertyDescriptor::Data {
-                // [[Value]]: rawObj,
-                value: raw_obj.into(),
-                // [[Writable]]: false,
-                writable: false,
-                // [[Enumerable]]: false,
-                enumerable: false,
-                // [[Configurable]]: false
-                configurable: false,
-            },
-            // }).
-        }],
-    )
-    .expect("Should perform GC here");
-    template.set_backing_object(agent, template_backing_object.unbind());
+        BUILTIN_STRING_MEMORY.raw.to_property_key(),
+        PropertyDescriptor {
+            value: Some(raw_obj.into()),
+            writable: Some(false),
+            enumerable: Some(false),
+            configurable: Some(false),
+            ..Default::default()
+        },
+        None,
+        gc,
+    ));
+    assert!(defined);
     // 15. Perform ! SetIntegrityLevel(template, frozen).
     unwrap_try(template.try_prevent_extensions(agent, gc));
     // 16. Append the Record { [[Site]]: templateLiteral, [[Array]]: template }

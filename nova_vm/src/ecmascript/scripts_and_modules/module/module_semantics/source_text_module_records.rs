@@ -556,8 +556,8 @@ struct IndirectExportEntryRecord<'a> {
     /// ### \[\[ImportName]]
     ///
     /// The name under which the desired binding is exported by the module
-    /// identified by \[\[ModuleRequest]]. None is used for
-    /// `export * as ns from "mod"` declarations.
+    /// identified by \[\[ModuleRequest]]. None represents the `all` import name used for
+    /// `export * as ns from "mod"` and re-exports of imported namespace bindings.
     import_name: Option<String<'a>>,
 }
 
@@ -1927,27 +1927,42 @@ pub fn parse_module<'a>(
                     } else {
                         for entry in ee.specifiers.iter() {
                             // 1. Let sourceName be the StringValue of the first ModuleExportName.
-                            let source_name =
-                                String::from_str(agent, entry.local.name().as_str(), gc);
+                            let local_name_str = entry.local.name().as_str();
+                            let source_name = String::from_str(agent, local_name_str, gc);
                             // 2. Let exportName be the StringValue of the second ModuleExportName.
                             let export_name = if entry.local.name() == entry.exported.name() {
                                 source_name
                             } else {
                                 String::from_str(agent, entry.exported.name().as_str(), gc)
                             };
-                            // a. Let localName be sourceName.
-                            let local_name = source_name;
-                            // b. Let importName be null.
-                            // 4. Return a List whose sole element is a new ExportEntry Record {
-                            local_export_entries.push(LocalExportEntryRecord {
-                                // [[ModuleRequest]]: module,
-                                // [[ImportName]]: importName,
-                                // [[LocalName]]: localName,
-                                local_name,
-                                // [[ExportName]]: exportName
-                                export_name,
-                            });
-                            // }.
+                            // 10.a.ii. If localName is an imported binding, rewrite this
+                            // export as though it had been re-exported from its original
+                            // module. This preserves the original binding identity through
+                            // ResolveExport and avoids exposing the import binding as local.
+                            if imported_bound_names.contains(local_name_str) {
+                                let import_entry = import_entries
+                                    .iter()
+                                    .find(|entry| entry.local_name == source_name)
+                                    .expect("imported local name has an ImportEntry");
+                                indirect_export_entries.push(IndirectExportEntryRecord {
+                                    export_name,
+                                    module_request: import_entry.module_request,
+                                    import_name: import_entry.import_name,
+                                });
+                            } else {
+                                // a. Let localName be sourceName.
+                                // b. Let importName be null.
+                                // 4. Return a List whose sole element is a new ExportEntry Record {
+                                local_export_entries.push(LocalExportEntryRecord {
+                                    // [[ModuleRequest]]: module,
+                                    // [[ImportName]]: importName,
+                                    // [[LocalName]]: localName,
+                                    local_name: source_name,
+                                    // [[ExportName]]: exportName
+                                    export_name,
+                                });
+                                // }.
+                            }
                         }
                     }
                 }

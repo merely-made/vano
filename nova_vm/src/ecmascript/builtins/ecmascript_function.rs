@@ -259,7 +259,7 @@ pub(crate) struct ECMAScriptFunctionObjectHeapData<'a> {
     pub(crate) realm: Realm<'a>,
 
     /// \[\[ScriptOrModule]]
-    pub(crate) script_or_module: ScriptOrModule<'a>,
+    pub(crate) script_or_module: Option<ScriptOrModule<'a>>,
 
     /// \[\[ThisMode]]
     pub(crate) this_mode: ThisMode,
@@ -677,7 +677,7 @@ pub(crate) fn prepare_for_ordinary_call<'a>(
         // 5. Set the Realm of calleeContext to calleeRealm.
         realm: callee_realm.unbind(),
         // 6. Set the ScriptOrModule of calleeContext to F.[[ScriptOrModule]].
-        script_or_module: Some(script_or_module.unbind()),
+        script_or_module: script_or_module.unbind(),
     };
     // 11. If callerContext is not already suspended, suspend callerContext.
     // 12. Push calleeContext onto the execution context stack; calleeContext is now the running execution context.
@@ -864,7 +864,7 @@ pub(crate) fn ordinary_function_create<'gc>(
         // 16. Set F.[[Realm]] to the current Realm Record.
         realm: agent.current_realm(gc),
         // 15. Set F.[[ScriptOrModule]] to GetActiveScriptOrModule().
-        script_or_module: get_active_script_or_module(agent, gc).unwrap().unbind(),
+        script_or_module: get_active_script_or_module(agent, gc).unbind(),
         // 9. If thisMode is LEXICAL-THIS, set F.[[ThisMode]] to LEXICAL.
         // 10. Else if Strict is true, set F.[[ThisMode]] to STRICT.
         // 11. Else, set F.[[ThisMode]] to GLOBAL.
