@@ -54,7 +54,7 @@ fn push_code_units(buf: &mut Wtf8Buf, units: &[u16], range: core::ops::Range<usi
             // is a valid WTF-8 CodePoint.
             Err(e) => {
                 buf.push(unsafe { CodePoint::from_u32_unchecked(e.unpaired_surrogate() as u32) })
-            },
+            }
         }
     }
 }
@@ -1040,7 +1040,11 @@ impl RegExpPrototype {
                 // ii. Set accumulatedResult to the string-concatenation of
                 //     accumulatedResult, the substring of S from
                 //     nextSourcePosition to position, and replacementString.
-                push_code_units(&mut accumulated_result, &units, next_source_position..position);
+                push_code_units(
+                    &mut accumulated_result,
+                    &units,
+                    next_source_position..position,
+                );
                 accumulated_result.push_wtf8(replacement_string.as_wtf8_(agent));
                 // iii. Set nextSourcePosition to position + matchLength.
                 next_source_position = position + match_length;
@@ -1049,7 +1053,11 @@ impl RegExpPrototype {
         // 16. If nextSourcePosition ≥ lengthS, return accumulatedResult.
         if next_source_position < length_s {
             // 17. Append the substring of S from nextSourcePosition to the end.
-            push_code_units(&mut accumulated_result, &units, next_source_position..length_s);
+            push_code_units(
+                &mut accumulated_result,
+                &units,
+                next_source_position..length_s,
+            );
         }
         Ok(String::from_wtf8_buf(agent, accumulated_result, gc.into_nogc()).into())
     }

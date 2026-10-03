@@ -3133,7 +3133,8 @@ fn wtf8_substring<'gc>(
     let (byte_from, lead) = match s.utf8_index_(agent, from) {
         Some(b) => (b, None),
         None => (
-            s.utf8_index_(agent, from + 1).expect("char after a split is a boundary"),
+            s.utf8_index_(agent, from + 1)
+                .expect("char after a split is a boundary"),
             Some(s.char_code_at_(agent, from)),
         ),
     };
@@ -3142,7 +3143,8 @@ fn wtf8_substring<'gc>(
     let (byte_to, trail) = match s.utf8_index_(agent, to) {
         Some(b) => (b, None),
         None => (
-            s.utf8_index_(agent, to - 1).expect("char before a split is a boundary"),
+            s.utf8_index_(agent, to - 1)
+                .expect("char before a split is a boundary"),
             Some(s.char_code_at_(agent, to - 1)),
         ),
     };
@@ -3171,7 +3173,9 @@ fn utf8_index_ceil(s: String, agent: &Agent, pos: usize) -> usize {
     let pos = pos.min(s.utf16_len_(agent));
     match s.utf8_index_(agent, pos) {
         Some(b) => b,
-        None => s.utf8_index_(agent, pos + 1).expect("index after a split is a boundary"),
+        None => s
+            .utf8_index_(agent, pos + 1)
+            .expect("index after a split is a boundary"),
     }
 }
 
@@ -3182,7 +3186,9 @@ fn utf8_index_floor(s: String, agent: &Agent, pos: usize) -> usize {
     let pos = pos.min(s.utf16_len_(agent));
     match s.utf8_index_(agent, pos) {
         Some(b) => b,
-        None => s.utf8_index_(agent, pos - 1).expect("index before a split is a boundary"),
+        None => s
+            .utf8_index_(agent, pos - 1)
+            .expect("index before a split is a boundary"),
     }
 }
 
