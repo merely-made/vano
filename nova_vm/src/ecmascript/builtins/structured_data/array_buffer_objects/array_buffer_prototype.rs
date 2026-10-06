@@ -5,10 +5,10 @@
 use crate::{
     ecmascript::{
         Agent, AnyArrayBuffer, ArgumentsList, ArrayBuffer, BUILTIN_STRING_MEMORY, Behaviour,
-        Builtin, BuiltinGetter, ExceptionType, JsResult, PropertyKey, ProtoIntrinsics, Realm,
-        String, Value, builders::OrdinaryObjectBuilder, construct, is_detached_buffer,
-        is_fixed_length_array_buffer, species_constructor, to_index, to_integer_or_infinity,
-        try_result_into_js, try_to_index,
+        Builtin, BuiltinGetter, ExceptionType, Function, JsResult, PropertyKey, ProtoIntrinsics,
+        Realm, String, Value, allocate_array_buffer, builders::OrdinaryObjectBuilder, construct,
+        detach_array_buffer, is_detached_buffer, is_fixed_length_array_buffer, species_constructor,
+        to_index, to_integer_or_infinity, try_result_into_js, try_to_index,
     },
     engine::{Bindable, GcScope, NoGcScope, Scopable},
     heap::WellKnownSymbols,
@@ -369,28 +369,39 @@ impl ArrayBufferPrototype {
     /// ### [25.1.6.8 ArrayBuffer.prototype.transfer ( [ newLength ] )](https://tc39.es/ecma262/#sec-arraybuffer.prototype.transfer)
     fn transfer<'gc>(
         agent: &mut Agent,
-        _this_value: Value,
-        _: ArgumentsList,
+        this_value: Value,
+        arguments: ArgumentsList,
         gc: GcScope<'gc, '_>,
     ) -> JsResult<'gc, Value<'gc>> {
         // 1. Let O be the this value.
         // 2. Return ? ArrayBufferCopyAndDetach(O, newLength, preserve-resizability).
-        Err(agent.todo("ArrayBuffer.prototype.transfer", gc.into_nogc()))
+        array_buffer_copy_and_detach(
+            agent,
+            this_value,
+            arguments.get(0).bind(gc.nogc()).unbind(),
+            true,
+            gc,
+        )
+        .map(Into::into)
     }
 
     /// ### [25.1.6.9 ArrayBuffer.prototype.transferToFixedLength ( [ newLength ] )](https://tc39.es/ecma262/#sec-arraybuffer.prototype.transfertofixedlength)
     fn transfer_to_fixed_length<'gc>(
         agent: &mut Agent,
-        _this_value: Value,
-        _: ArgumentsList,
+        this_value: Value,
+        arguments: ArgumentsList,
         gc: GcScope<'gc, '_>,
     ) -> JsResult<'gc, Value<'gc>> {
         // 1. Let O be the this value.
         // 2. Return ? ArrayBufferCopyAndDetach(O, newLength, fixed-length).
-        Err(agent.todo(
-            "ArrayBuffer.prototype.transferToFixedLength",
-            gc.into_nogc(),
-        ))
+        array_buffer_copy_and_detach(
+            agent,
+            this_value,
+            arguments.get(0).bind(gc.nogc()).unbind(),
+            false,
+            gc,
+        )
+        .map(Into::into)
     }
 
     pub(crate) fn create_intrinsic(agent: &mut Agent, realm: Realm<'static>) {
@@ -421,6 +432,92 @@ impl ArrayBufferPrototype {
             })
             .build();
     }
+}
+
+/// ### [25.1.3.3 ArrayBufferCopyAndDetach ( arrayBuffer, newLength, preserveResizability )](https://tc39.es/ecma262/#sec-arraybuffercopyanddetach)
+fn array_buffer_copy_and_detach<'gc>(
+    agent: &mut Agent,
+    array_buffer: Value,
+    new_length: Value,
+    preserve_resizability: bool,
+    mut gc: GcScope<'gc, '_>,
+) -> JsResult<'gc, ArrayBuffer<'gc>> {
+    // 1. Perform ? RequireInternalSlot(arrayBuffer, [[ArrayBufferData]]).
+    // 2. If IsSharedArrayBuffer(arrayBuffer) is true, throw a TypeError exception.
+    let mut array_buffer = require_internal_slot_array_buffer(agent, array_buffer, gc.nogc())
+        .unbind()?
+        .bind(gc.nogc());
+
+    // Capture the initial byte length only for the omitted/undefined case.
+    // For an explicit length, ToIndex may run user code which can resize the
+    // source; the current byte length is read after that conversion below.
+    let new_byte_length = if new_length.is_undefined() {
+        array_buffer.byte_length(agent) as u64
+    } else {
+        let scoped_array_buffer = array_buffer.scope(agent, gc.nogc());
+        let new_byte_length = to_index(agent, new_length.unbind(), gc.reborrow()).unbind()?;
+        array_buffer = scoped_array_buffer.get(agent).bind(gc.nogc());
+        new_byte_length
+    };
+
+    // 5. If IsDetachedBuffer(arrayBuffer) is true, throw a TypeError exception.
+    if is_detached_buffer(agent, array_buffer) {
+        return Err(agent.throw_exception_with_static_message(
+            ExceptionType::TypeError,
+            "Cannot transfer a detached ArrayBuffer",
+            gc.into_nogc(),
+        ));
+    }
+
+    // 6-7. Preserve the original maximum only for transfer() on a resizable
+    // buffer. transferToFixedLength() always allocates a fixed-length result.
+    let new_max_byte_length = if preserve_resizability && array_buffer.is_resizable(agent) {
+        Some(array_buffer.max_byte_length(agent))
+    } else {
+        None
+    };
+
+    // 8. A non-undefined [[ArrayBufferDetachKey]] prevents transfer.
+    if array_buffer.get_detach_key(agent).is_some() {
+        return Err(agent.throw_exception_with_static_message(
+            ExceptionType::TypeError,
+            "Cannot transfer an ArrayBuffer with a detach key",
+            gc.into_nogc(),
+        ));
+    }
+
+    // Keep the source live across allocation, which may trigger garbage
+    // collection. AllocateArrayBuffer uses the current realm's intrinsic
+    // constructor, as required by the standard operation.
+    let scoped_array_buffer = array_buffer.scope(agent, gc.nogc());
+    let current_realm = agent.current_realm(gc.nogc());
+    let constructor = agent
+        .get_realm_record_by_id(current_realm)
+        .intrinsics()
+        .array_buffer();
+    let new_buffer = allocate_array_buffer(
+        agent,
+        Function::BuiltinFunction(constructor),
+        new_byte_length,
+        new_max_byte_length.map(|length| length as u64),
+        gc.reborrow(),
+    )
+    .unbind()?;
+    let gc = gc.into_nogc();
+    let new_buffer = new_buffer.bind(gc);
+    array_buffer = scoped_array_buffer.get(agent).bind(gc);
+
+    // 10-13. Copy the bytes that fit. Newly allocated bytes are already zeroed.
+    let copy_length = new_byte_length.min(array_buffer.byte_length(agent) as u64) as usize;
+    if copy_length > 0 {
+        new_buffer.copy_array_buffer_data(agent, array_buffer, 0, copy_length);
+    }
+
+    // 15. Perform ! DetachArrayBuffer(arrayBuffer).
+    detach_array_buffer(agent, array_buffer, None, gc)?;
+
+    // 16. Return newBuffer.
+    Ok(new_buffer)
 }
 
 #[inline]
