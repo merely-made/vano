@@ -300,7 +300,7 @@ impl PromiseReactionJob {
         let Some(promise_capability) = promise_capability else {
             return match handler_result {
                 Ok(_) => Ok(()),
-                Err(error) => Err(error),
+                Err(error) => Err(error.unbind().bind(gc.into_nogc())),
             };
         };
 
