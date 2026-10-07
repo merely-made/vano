@@ -229,6 +229,22 @@ pub(crate) fn perform_promise_then(
     )
 }
 
+/// Attach fulfillment and rejection handlers to a Promise without creating a
+/// result Promise or consulting constructor/species properties.
+///
+/// This is intended for host integrations that need the standard Promise
+/// reaction scheduling and handling behavior without the result capability
+/// produced by `Promise.prototype.then`.
+pub fn perform_promise_then_without_capability<'a>(
+    agent: &mut Agent,
+    promise: Promise<'a>,
+    on_fulfilled: Value<'a>,
+    on_rejected: Value<'a>,
+    gc: NoGcScope<'a, '_>,
+) {
+    perform_promise_then(agent, promise, on_fulfilled, on_rejected, None, gc);
+}
+
 /// Corresponds to PerformPromiseThen starting at step 7. Useful for Nova-internal promise reaction
 /// handlers, without a JS function.
 pub(crate) fn inner_promise_then(

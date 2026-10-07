@@ -124,7 +124,10 @@ impl PromiseReactionJob {
 
         let (handler_result, promise_capability) = match reaction_data.handler {
             PromiseReactionHandler::Empty => {
-                let capability = reaction_data.capability.clone().unwrap();
+                let capability = reaction_data
+                    .capability
+                    .clone()
+                    .map(|capability| capability.bind(gc.nogc()));
                 match reaction_data.reaction_type {
                     PromiseReactionType::Fulfill => {
                         // d.i.1. Let handlerResult be NormalCompletion(argument).
@@ -152,16 +155,13 @@ impl PromiseReactionJob {
                 .unbind()
                 .bind(gc.nogc());
                 // SAFETY: reaction is not shared.
-                let reaction = unsafe { reaction.take(agent) };
-                (
-                    result,
-                    reaction
-                        .get(agent)
-                        .capability
-                        .clone()
-                        .unwrap()
-                        .bind(gc.nogc()),
-                )
+                let reaction = unsafe { reaction.take(agent) }.bind(gc.nogc());
+                let capability = reaction
+                    .get(agent)
+                    .capability
+                    .clone()
+                    .map(|capability| capability.bind(gc.nogc()));
+                (result, capability)
             }
             PromiseReactionHandler::Await(await_reaction) => {
                 assert!(reaction_data.capability.is_none());
@@ -195,7 +195,7 @@ impl PromiseReactionJob {
                 // a. Return CreateIteratorResultObject(v, done).
                 (
                     create_iter_result_object(agent, argument, done, gc.nogc()).map(|o| o.into()),
-                    capability,
+                    Some(capability),
                 )
             }
             PromiseReactionHandler::AsyncFromSyncIteratorClose(object) => {
@@ -217,7 +217,7 @@ impl PromiseReactionJob {
                     .clone()
                     .unwrap()
                     .bind(gc.nogc());
-                (Err(err), capability)
+                (Err(err), Some(capability))
             }
             PromiseReactionHandler::AsyncModule(module) => {
                 assert!(reaction_data.capability.is_none());
@@ -252,7 +252,7 @@ impl PromiseReactionJob {
                         // b. Return unused.
                         (
                             Err(JsError::new(argument)),
-                            PromiseCapability::from_promise(promise, true),
+                            Some(PromiseCapability::from_promise(promise, true)),
                         )
                     }
                 }
@@ -271,7 +271,7 @@ impl PromiseReactionJob {
                     }
                     PromiseReactionType::Reject => (
                         Err(JsError::new(argument)),
-                        PromiseCapability::from_promise(promise, true),
+                        Some(PromiseCapability::from_promise(promise, true)),
                     ),
                 }
             }
@@ -294,6 +294,15 @@ impl PromiseReactionJob {
         // f. If promiseCapability is undefined, then
         // i. Assert: handlerResult is not an abrupt completion.
         // ii. Return empty.
+        // The public host-integration wrapper can attach JavaScript callbacks
+        // without a result capability. A thrown callback still has to surface
+        // through the host's ordinary job-error path instead of panicking.
+        let Some(promise_capability) = promise_capability else {
+            return match handler_result {
+                Ok(_) => Ok(()),
+                Err(error) => Err(error),
+            };
+        };
 
         match handler_result {
             // h. If handlerResult is an abrupt completion, then

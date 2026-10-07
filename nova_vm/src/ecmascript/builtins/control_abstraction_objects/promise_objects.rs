@@ -8,4 +8,5 @@ mod promise_prototype;
 
 pub use promise_abstract_operations::*;
 pub(crate) use promise_constructor::*;
+pub use promise_prototype::perform_promise_then_without_capability;
 pub(crate) use promise_prototype::*;
