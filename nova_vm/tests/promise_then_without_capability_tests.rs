@@ -264,9 +264,10 @@ fn omitted_rejection_handler_without_a_capability_returns_the_original_reason() 
 
         let error = next_promise_job(hooks)
             .run(agent, gc.reborrow())
-            .expect_err("empty rejection handler should follow the job error path");
+            .expect_err("empty rejection handler should follow the job error path")
+            .unbind();
         assert_eq!(
-            error.value(),
+            error.bind(gc.nogc()).value(),
             reason.get(agent, gc.nogc()).bind(gc.nogc()),
             "the job error should preserve the exact rejection reason",
         );
@@ -305,9 +306,10 @@ fn thrown_callback_without_a_capability_returns_the_original_reason() {
 
         let error = next_promise_job(hooks)
             .run(agent, gc.reborrow())
-            .expect_err("a thrown callback should follow the job error path");
+            .expect_err("a thrown callback should follow the job error path")
+            .unbind();
         assert_eq!(
-            error.value(),
+            error.bind(gc.nogc()).value(),
             reason.get(agent, gc.nogc()).bind(gc.nogc()),
             "the job error should preserve the exact thrown value",
         );
