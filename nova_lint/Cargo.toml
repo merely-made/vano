@@ -1,4 +1,5 @@
 [package]
+rust-version = "1.97.1"
 name = "nova_lint"
 repository = "https://github.com/merely-made/vano/tree/main/nova_lint"
 description = "A collection of custom lints to ease the development and maintenance of the Nova project."

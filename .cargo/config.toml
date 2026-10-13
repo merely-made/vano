@@ -2,3 +2,6 @@
 # https://github.com/rust-lang/rust/issues/141626
 [target.'cfg(target_os = "windows")']
 linker = "rust-lld"
+
+[build]
+build-dir = "{workspace-root}/target/build"

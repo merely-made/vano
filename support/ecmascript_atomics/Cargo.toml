@@ -10,6 +10,7 @@
 # See Cargo.toml.orig for the original contents.
 
 [package]
+rust-version = "1.97.1"
 edition = "2024"
 name = "ecmascript_atomics"
 version = "0.2.3"

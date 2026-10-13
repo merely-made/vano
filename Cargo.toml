@@ -4,6 +4,7 @@ members = ["nova_cli", "nova_vm", "small_string", "support/ecmascript_atomics", 
 exclude = ["nova_lint"]
 
 [workspace.package]
+rust-version = "1.97.1"
 edition = "2024"
 version = "1.0.0"
 license = "MPL-2.0"

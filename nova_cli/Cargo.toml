@@ -1,4 +1,5 @@
 [package]
+rust-version = "1.97.1"
 name = "nova_cli"
 repository = "https://github.com/merely-made/vano/tree/main/nova_cli"
 description = "Command-line interface for the Vano JavaScript engine"

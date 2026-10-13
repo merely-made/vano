@@ -1,4 +1,5 @@
 [package]
+rust-version = "1.97.1"
 name = "nova_vm"
 repository = "https://github.com/merely-made/vano/tree/main/nova_vm"
 description = "Data-oriented JavaScript engine used by Genet"
