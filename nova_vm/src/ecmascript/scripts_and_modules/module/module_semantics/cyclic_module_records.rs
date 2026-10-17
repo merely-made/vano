@@ -1135,7 +1135,7 @@ pub(crate) fn async_module_execution_rejected(
         // a. Assert: module.[[CycleRoot]] and module are the same Module Record.
         assert_eq!(module.get_cycle_root(agent), Some(module));
         // b. Perform ! Call(module.[[TopLevelCapability]].[[Reject]], undefined, « error »).
-        top_level_capability.reject(agent, Value::Undefined, gc);
+        top_level_capability.reject(agent, error.value(), gc);
     }
     // 11. Return unused.
 }

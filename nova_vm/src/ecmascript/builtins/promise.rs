@@ -87,7 +87,7 @@ impl<'a> Promise<'a> {
 
     /// Get the result of a resolved Promise, or None if the Promise is not
     /// resolved.
-    pub(crate) fn try_get_result<'gc>(
+    pub fn try_get_result<'gc>(
         self,
         agent: &Agent,
         gc: NoGcScope<'gc, '_>,

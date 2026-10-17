@@ -45,6 +45,14 @@ arena_vec_access!(
     errors
 );
 
+impl Error<'_> {
+    /// The native Error brand stored in this object's internal data. Unlike
+    /// `name`, `constructor`, or its prototype, script cannot replace this.
+    pub fn kind(self, agent: &Agent) -> ExceptionType {
+        self.get(agent).kind
+    }
+}
+
 impl<'a> InternalSlots<'a> for Error<'a> {
     const DEFAULT_PROTOTYPE: ProtoIntrinsics = ProtoIntrinsics::Error;
 

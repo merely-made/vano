@@ -79,6 +79,23 @@ pub struct AgentOptions {
 /// Result of methods that may throw a JavaScript error.
 pub type JsResult<'a, T> = core::result::Result<T, JsError<'a>>;
 
+/// The module operation that produced an observed failure or remained pending.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ModuleRunPhase {
+    Load,
+    Link,
+    Evaluate,
+}
+
+/// Host-visible result of running a module through its three operations.
+/// The ordinary `run_module` API keeps its existing completion behavior.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ModuleRunOutcome<'a> {
+    Completed(Value<'a>),
+    Failed { phase: ModuleRunPhase, error: JsError<'a> },
+    Pending { phase: ModuleRunPhase, promise: Promise<'a> },
+}
+
 impl<'a, T: 'a> From<JsError<'a>> for JsResult<'a, T> {
     fn from(value: JsError<'a>) -> Self {
         JsResult::Err(value)
@@ -1567,30 +1584,60 @@ impl Agent {
         host_defined: Option<HostDefined>,
         mut gc: GcScope<'gc, '_>,
     ) -> JsResult<'gc, Value<'gc>> {
-        let module = module.bind(gc.nogc());
-        let Some(result) = module
-            .load_requested_modules(self, host_defined, gc.nogc())
-            .try_get_result(self, gc.nogc())
-        else {
-            return Err(self.throw_exception_with_static_message(
-                ExceptionType::Error,
-                "module was not sync",
-                gc.into_nogc(),
-            ));
-        };
-        result.unbind()?;
+        match self.run_module_observed(module, host_defined, gc.reborrow()) {
+            ModuleRunOutcome::Completed(value) => Ok(value.unbind()),
+            ModuleRunOutcome::Failed { error, .. } => Err(error.unbind()),
+            ModuleRunOutcome::Pending { phase: ModuleRunPhase::Load, .. } => {
+                Err(self.throw_exception_with_static_message(
+                    ExceptionType::Error,
+                    "module was not sync",
+                    gc.into_nogc(),
+                ))
+            },
+            ModuleRunOutcome::Pending { phase: ModuleRunPhase::Evaluate, .. } => Ok(Value::Undefined),
+            ModuleRunOutcome::Pending { phase: ModuleRunPhase::Link, .. } => unreachable!(),
+        }
+    }
 
-        module.link(self, gc.nogc()).unbind()?;
-        if let Some(result) = module
-            .unbind()
-            .evaluate(self, gc.reborrow())
-            .unbind()
-            .try_get_result(self, gc.into_nogc())
-        {
-            // Note: module resolved synchronously.
-            result
+    /// Run module loading, linking and evaluation while retaining the operation
+    /// that failed. A pending promise is explicit, including top-level await.
+    /// This should not be called multiple times on the same module.
+    pub fn run_module_observed<'gc>(
+        &mut self,
+        module: SourceTextModule,
+        host_defined: Option<HostDefined>,
+        mut gc: GcScope<'gc, '_>,
+    ) -> ModuleRunOutcome<'gc> {
+        let module = module.bind(gc.nogc());
+        let load = module.load_requested_modules(self, host_defined, gc.nogc());
+        let Some(result) = load.try_get_result(self, gc.nogc())
+        else {
+            return ModuleRunOutcome::Pending { phase: ModuleRunPhase::Load, promise: load.unbind() };
+        };
+        if let Err(error) = result.unbind() {
+            return ModuleRunOutcome::Failed {
+                phase: ModuleRunPhase::Load,
+                error,
+            };
+        }
+
+        if let Err(error) = module.link(self, gc.nogc()).unbind() {
+            return ModuleRunOutcome::Failed {
+                phase: ModuleRunPhase::Link,
+                error,
+            };
+        }
+        let evaluation = module.unbind().evaluate(self, gc.reborrow()).unbind();
+        if let Some(result) = evaluation.try_get_result(self, gc.into_nogc()) {
+            match result {
+                Ok(value) => ModuleRunOutcome::Completed(value),
+                Err(error) => ModuleRunOutcome::Failed {
+                    phase: ModuleRunPhase::Evaluate,
+                    error,
+                },
+            }
         } else {
-            Ok(Value::Undefined)
+            ModuleRunOutcome::Pending { phase: ModuleRunPhase::Evaluate, promise: evaluation }
         }
     }
 }
