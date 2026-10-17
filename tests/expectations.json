@@ -1030,7 +1030,6 @@
   "built-ins/Proxy/set/null-handler.js": "FAIL",
   "built-ins/Proxy/setPrototypeOf/null-handler.js": "FAIL",
   "built-ins/Reflect/defineProperty/length.js": "FAIL",
-  "built-ins/RegExp/character-class-escape-non-whitespace.js": "FAIL",
   "built-ins/RegExp/named-groups/duplicate-names-exec.js": "FAIL",
   "built-ins/RegExp/named-groups/duplicate-names-match.js": "FAIL",
   "built-ins/RegExp/named-groups/duplicate-names-test.js": "FAIL",
