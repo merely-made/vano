@@ -22,7 +22,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Spell check
-        uses: crate-ci/typos@master
+        uses: crate-ci/typos@v1.51.1
 
   lint:
     name: Lint

@@ -5,7 +5,7 @@
 use crate::{
     ecmascript::{
         AbstractModule, AsyncGenerator, AwaitReaction, Function, Object, Promise,
-        PromiseCapability, PromiseGroup, SourceTextModule,
+        PromiseCapability, SourceTextModule,
     },
     engine::{Bindable, bindable_handle},
     heap::{
@@ -54,10 +54,6 @@ pub(crate) enum PromiseReactionHandler<'a> {
         promise: Promise<'a>,
         module: AbstractModule<'a>,
     },
-    PromiseGroup {
-        index: u32,
-        promise_group: PromiseGroup<'a>,
-    },
     Empty,
 }
 bindable_handle!(PromiseReactionHandler);
@@ -76,10 +72,6 @@ impl HeapMarkAndSweep for PromiseReactionHandler<'static> {
                 promise.mark_values(queues);
                 module.mark_values(queues);
             }
-            Self::PromiseGroup {
-                index: _,
-                promise_group,
-            } => promise_group.mark_values(queues),
             Self::Empty => {}
         }
     }
@@ -99,10 +91,6 @@ impl HeapMarkAndSweep for PromiseReactionHandler<'static> {
                 promise.sweep_values(compactions);
                 module.sweep_values(compactions);
             }
-            Self::PromiseGroup {
-                index: _,
-                promise_group,
-            } => promise_group.sweep_values(compactions),
             Self::Empty => {}
         }
     }
