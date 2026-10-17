@@ -144,10 +144,11 @@ impl BigIntConstructor {
                 }
             }
             _ => {
-                let divisor =
-                    num_bigint::BigInt::from_bytes_le(num_bigint::Sign::Plus, &[2]).pow(bits);
                 match bigint {
                     BigInt::BigInt(bigint) => {
+                        let divisor =
+                            num_bigint::BigInt::from_bytes_le(num_bigint::Sign::Plus, &[2])
+                                .pow(bits);
                         let modulo = &bigint.get(agent).data % &divisor;
                         let divisor_half = &divisor >> 1;
                         if let Ok(modulo) = i64::try_from(&modulo) {
@@ -211,6 +212,18 @@ impl BigIntConstructor {
                 }
             },
             None => {
+                // Note: A non-negative value below 2**bits is its own result;
+                // avoid materialising a 2**bits modulus for it.
+                let already_in_range = match bigint {
+                    BigInt::BigInt(int) => {
+                        let int = &int.get(agent).data;
+                        int.sign() != num_bigint::Sign::Minus && int.bits() <= u64::from(bits)
+                    }
+                    BigInt::SmallBigInt(int) => int.into_i64() >= 0,
+                };
+                if already_in_range {
+                    return Ok(bigint.unbind().bind(gc.into_nogc()).into());
+                }
                 let modulus =
                     num_bigint::BigInt::from_bytes_le(num_bigint::Sign::Plus, &[2]).pow(bits);
                 match bigint {
