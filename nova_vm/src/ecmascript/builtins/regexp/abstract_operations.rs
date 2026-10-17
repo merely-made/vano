@@ -461,7 +461,6 @@ pub(crate) struct RegExpExecBase<'gc> {
     pub(crate) global: bool,
     pub(crate) sticky: bool,
     pub(crate) has_indices: bool,
-    #[expect(dead_code)]
     pub(crate) full_unicode: bool,
 }
 
@@ -670,7 +669,7 @@ pub(crate) fn reg_exp_builtin_exec<'a>(
     unwrap_try(try_create_data_property_or_throw(
         agent,
         a,
-        PropertyKey::try_from(0u32).unwrap(),
+        PropertyKey::from(0u32),
         matched.into(),
         None,
         gc,
@@ -723,7 +722,7 @@ pub(crate) fn reg_exp_builtin_exec<'a>(
         unwrap_try(try_create_data_property_or_throw(
             agent,
             indices,
-            PropertyKey::try_from(0u32).unwrap(),
+            PropertyKey::from(0u32),
             whole.into(),
             None,
             gc,
@@ -794,7 +793,7 @@ fn index_pair<'gc>(
     unwrap_try(try_create_data_property_or_throw(
         agent,
         pair,
-        PropertyKey::try_from(0u32).unwrap(),
+        PropertyKey::from(0u32),
         Number::try_from(start).unwrap().into(),
         None,
         gc,
@@ -802,7 +801,7 @@ fn index_pair<'gc>(
     unwrap_try(try_create_data_property_or_throw(
         agent,
         pair,
-        PropertyKey::try_from(1u32).unwrap(),
+        PropertyKey::from(1u32),
         Number::try_from(end).unwrap().into(),
         None,
         gc,

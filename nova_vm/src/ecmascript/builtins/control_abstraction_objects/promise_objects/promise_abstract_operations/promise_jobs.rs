@@ -275,20 +275,6 @@ impl PromiseReactionJob {
                     ),
                 }
             }
-            PromiseReactionHandler::PromiseGroup {
-                promise_group,
-                index,
-            } => {
-                let reaction_type = reaction_data.reaction_type;
-                promise_group.unbind().settle(
-                    agent,
-                    reaction_type,
-                    index,
-                    argument.unbind(),
-                    gc.reborrow(),
-                );
-                return Ok(());
-            }
         };
 
         // f. If promiseCapability is undefined, then
@@ -359,8 +345,7 @@ pub(crate) fn new_promise_reaction_job(
         | PromiseReactionHandler::AsyncFromSyncIteratorClose(_)
         | PromiseReactionHandler::AsyncModule(_)
         | PromiseReactionHandler::DynamicImport { .. }
-        | PromiseReactionHandler::DynamicImportEvaluate { .. }
-        | PromiseReactionHandler::PromiseGroup { .. } => None,
+        | PromiseReactionHandler::DynamicImportEvaluate { .. } => None,
     };
 
     // 4. Return the Record { [[Job]]: job, [[Realm]]: handlerRealm }.

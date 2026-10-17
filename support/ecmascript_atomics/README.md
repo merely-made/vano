@@ -88,7 +88,7 @@ The internals of the library then take care to never perform any reads or
 writes through the pointers, nor create any references to non-ZST data from
 them. This should keep the compiler from realising that the pointed-to memory
 is still actually allocated and useable, as it should since the compiler must
-not assume it can eg. inject suprious reads or writes on these pointers.
+not assume it can eg. inject spurious reads or writes on these pointers.
 
 # Should you use this crate
 

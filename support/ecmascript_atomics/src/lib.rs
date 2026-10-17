@@ -338,7 +338,6 @@ impl<T: RacyStorage> RacyMemory<T> {
     /// an invalid pointer. It is thus strictly forbidden for any Rust code to
     /// read from or write into the memory, including with atomic operations.
     #[inline]
-    #[must_use]
     pub unsafe fn enter(ptr: NonNull<u8>, len: usize) -> RacyMemory<u8> {
         // SAFETY: function precondition.
         let ptr = unsafe { enter_racy_memory(ptr) };
@@ -357,7 +356,6 @@ impl<T: RacyStorage> RacyMemory<T> {
     ///
     /// [`enter`]: crate::RacyMemory::enter
     #[inline]
-    #[must_use]
     pub unsafe fn enter_ptr(ptr: NonNull<T>) -> Self {
         // SAFETY: function precondition.
         let ptr = unsafe { enter_racy_memory(ptr) };
@@ -376,7 +374,6 @@ impl<T: RacyStorage> RacyMemory<T> {
     ///
     /// [`enter`]: crate::RacyMemory::enter
     #[inline]
-    #[must_use]
     pub unsafe fn enter_slice(ptr: NonNull<[T]>) -> Self {
         let len = ptr.len();
         // SAFETY: function precondition.
