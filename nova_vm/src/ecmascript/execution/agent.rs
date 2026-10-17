@@ -82,8 +82,11 @@ pub type JsResult<'a, T> = core::result::Result<T, JsError<'a>>;
 /// The module operation that produced an observed failure or remained pending.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ModuleRunPhase {
+    /// Loading the module graph.
     Load,
+    /// Linking the loaded module graph.
     Link,
+    /// Evaluating the linked module graph.
     Evaluate,
 }
 
@@ -91,9 +94,22 @@ pub enum ModuleRunPhase {
 /// The ordinary `run_module` API keeps its existing completion behavior.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ModuleRunOutcome<'a> {
+    /// The module ran to completion with this value.
     Completed(Value<'a>),
-    Failed { phase: ModuleRunPhase, error: JsError<'a> },
-    Pending { phase: ModuleRunPhase, promise: Promise<'a> },
+    /// An operation failed with an error.
+    Failed {
+        /// The operation that failed.
+        phase: ModuleRunPhase,
+        /// The thrown error.
+        error: JsError<'a>,
+    },
+    /// An operation is still pending on a promise.
+    Pending {
+        /// The operation that is pending.
+        phase: ModuleRunPhase,
+        /// The promise the operation is waiting on.
+        promise: Promise<'a>,
+    },
 }
 
 impl<'a, T: 'a> From<JsError<'a>> for JsResult<'a, T> {
@@ -1587,15 +1603,22 @@ impl Agent {
         match self.run_module_observed(module, host_defined, gc.reborrow()) {
             ModuleRunOutcome::Completed(value) => Ok(value.unbind()),
             ModuleRunOutcome::Failed { error, .. } => Err(error.unbind()),
-            ModuleRunOutcome::Pending { phase: ModuleRunPhase::Load, .. } => {
-                Err(self.throw_exception_with_static_message(
-                    ExceptionType::Error,
-                    "module was not sync",
-                    gc.into_nogc(),
-                ))
-            },
-            ModuleRunOutcome::Pending { phase: ModuleRunPhase::Evaluate, .. } => Ok(Value::Undefined),
-            ModuleRunOutcome::Pending { phase: ModuleRunPhase::Link, .. } => unreachable!(),
+            ModuleRunOutcome::Pending {
+                phase: ModuleRunPhase::Load,
+                ..
+            } => Err(self.throw_exception_with_static_message(
+                ExceptionType::Error,
+                "module was not sync",
+                gc.into_nogc(),
+            )),
+            ModuleRunOutcome::Pending {
+                phase: ModuleRunPhase::Evaluate,
+                ..
+            } => Ok(Value::Undefined),
+            ModuleRunOutcome::Pending {
+                phase: ModuleRunPhase::Link,
+                ..
+            } => unreachable!(),
         }
     }
 
@@ -1610,9 +1633,11 @@ impl Agent {
     ) -> ModuleRunOutcome<'gc> {
         let module = module.bind(gc.nogc());
         let load = module.load_requested_modules(self, host_defined, gc.nogc());
-        let Some(result) = load.try_get_result(self, gc.nogc())
-        else {
-            return ModuleRunOutcome::Pending { phase: ModuleRunPhase::Load, promise: load.unbind() };
+        let Some(result) = load.try_get_result(self, gc.nogc()) else {
+            return ModuleRunOutcome::Pending {
+                phase: ModuleRunPhase::Load,
+                promise: load.unbind(),
+            };
         };
         if let Err(error) = result.unbind() {
             return ModuleRunOutcome::Failed {
@@ -1637,7 +1662,10 @@ impl Agent {
                 },
             }
         } else {
-            ModuleRunOutcome::Pending { phase: ModuleRunPhase::Evaluate, promise: evaluation }
+            ModuleRunOutcome::Pending {
+                phase: ModuleRunPhase::Evaluate,
+                promise: evaluation,
+            }
         }
     }
 }
