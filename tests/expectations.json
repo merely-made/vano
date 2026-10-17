@@ -5698,7 +5698,6 @@
   "language/module-code/instn-resolve-order-src.js": "FAIL",
   "language/module-code/instn-star-err-not-found.js": "FAIL",
   "language/module-code/top-level-await/await-dynamic-import-rejection.js": "FAIL",
-  "language/module-code/top-level-await/dynamic-import-rejection.js": "FAIL",
   "language/module-code/top-level-await/module-import-rejection-body.js": "FAIL",
   "language/module-code/top-level-await/module-import-rejection-tick.js": "FAIL",
   "language/module-code/top-level-await/module-import-rejection.js": "FAIL",
