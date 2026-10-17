@@ -10,7 +10,7 @@ pub(crate) use data::*;
 
 use crate::{
     ecmascript::{
-        Agent, JsResult, ProtoIntrinsics, TryResult,
+        Agent, JsResult, ProtoIntrinsics, TryResult, js_result_into_try,
         types::{
             BUILTIN_STRING_MEMORY, InternalMethods, InternalSlots, OrdinaryObject,
             PropertyDescriptor, PropertyKey, SetResult, String, TryGetResult, TryHasResult, Value,
@@ -29,8 +29,9 @@ use oxc_ast::ast::RegExpFlags;
 use wtf8::Wtf8Buf;
 
 use super::ordinary::{
-    PropertyLookupCache, ordinary_get_own_property, ordinary_has_property, ordinary_set,
-    ordinary_try_get, ordinary_try_has_property, ordinary_try_set,
+    PropertyLookupCache, ordinary_define_own_property, ordinary_get_own_property,
+    ordinary_has_property, ordinary_set, ordinary_try_get, ordinary_try_has_property,
+    ordinary_try_set,
 };
 
 /// ## [22.2 RegExp (Regular Expression) Objects](https://tc39.es/ecma262/#sec-regexp-regular-expression-objects)
@@ -194,6 +195,37 @@ impl<'a> InternalMethods<'a> for RegExp<'a> {
         } else {
             TryResult::Continue(None)
         }
+    }
+
+    fn try_define_own_property<'gc>(
+        self,
+        agent: &mut Agent,
+        property_key: PropertyKey,
+        property_descriptor: PropertyDescriptor,
+        cache: Option<PropertyLookupCache>,
+        gc: NoGcScope<'gc, '_>,
+    ) -> TryResult<'gc, bool> {
+        let new_value = property_descriptor.value;
+        let backing_object = self
+            .get_backing_object(agent)
+            .unwrap_or_else(|| self.create_backing_object(agent));
+        let result = js_result_into_try(ordinary_define_own_property(
+            agent,
+            self.into(),
+            backing_object,
+            property_key,
+            property_descriptor,
+            cache,
+            gc,
+        ));
+        if property_key == BUILTIN_STRING_MEMORY.lastIndex.into()
+            && matches!(result, TryResult::Continue(true))
+            && let Some(value) = new_value
+        {
+            // Keep the direct lastIndex copy in sync with the backing object.
+            self.get_mut(agent).last_index = RegExpLastIndex::from_value(value);
+        }
+        result
     }
 
     fn try_has_property<'gc>(
