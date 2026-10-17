@@ -65,7 +65,13 @@ jobs:
         working-directory: nova_lint
         run: cargo test
       - name: Dylint
-        run: cargo dylint --all
+        # .cargo/config.toml splits Cargo's build-dir from the target dir, but
+        # dylint-link names the library by toolchain next to its linker output,
+        # so the two must coincide for the library nova_lint builds.
+        run: |
+          host=$(rustc +nightly-2026-05-28 -vV | sed -n 's/^host: //p')
+          export CARGO_BUILD_BUILD_DIR="$PWD/target/dylint/libraries/nightly-2026-05-28-$host"
+          cargo dylint --all
 
   build:
     name: Build & Test
