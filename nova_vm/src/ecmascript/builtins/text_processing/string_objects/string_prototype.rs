@@ -3494,7 +3494,6 @@ pub(crate) fn get_substitution<'gc, 'scope>(
     // SAFETY: Scoped string data cannot be mutated or dropped.
     let matched = unsafe { core::mem::transmute::<&str, &'scope str>(matched.as_ref()) };
     // 1. Let stringLength be the length of str.
-    let utf8_string_length = str.len();
     // 2. Assert: position ≤ stringLength.
     debug_assert!(position <= scoped_str.get(agent).utf16_len_(agent));
     // Byte offset of the match position, for the `$\`` / `$'` substrings. A
@@ -3548,12 +3547,14 @@ pub(crate) fn get_substitution<'gc, 'scope>(
                 // i. Let ref be "$'".
                 r#ref = "$'";
                 // ii. Let matchLength be the length of matched.
-                let match_length = matched.len();
+                let match_length = scoped_matched.get(agent).utf16_len_(agent);
                 // iii. Let tailPos be position + matchLength.
-                let tail_pos = utf8_position.saturating_add(match_length);
+                let tail_pos = position.saturating_add(match_length);
                 // iv. Let refReplacement be the substring of str from
                 //     min(tailPos, stringLength).
-                ref_replacement = str[tail_pos.min(utf8_string_length)..].into();
+                // Note: positions are UTF-16 indexes; convert to a byte offset.
+                let utf8_tail_pos = utf8_index_floor(scoped_str.get(agent), agent, tail_pos);
+                ref_replacement = str[utf8_tail_pos..].into();
                 // v. NOTE: tailPos can exceed stringLength only if this
                 //    abstract operation was invoked by a call to the intrinsic
                 //    %Symbol.replace% method of %RegExp.prototype% on an
