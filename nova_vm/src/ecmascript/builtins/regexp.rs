@@ -307,7 +307,10 @@ impl<'a> InternalMethods<'a> for RegExp<'a> {
         cache: Option<PropertyLookupCache>,
         gc: NoGcScope<'gc, '_>,
     ) -> TryResult<'gc, SetResult<'gc>> {
-        if property_key == BUILTIN_STRING_MEMORY.lastIndex.into() {
+        // Note: With a different receiver (eg. a Proxy wrapping this RegExp)
+        // the set must go through the receiver's own internal methods, which
+        // we cannot do here.
+        if property_key == BUILTIN_STRING_MEMORY.lastIndex.into() && receiver == self.into() {
             // If we're setting the last index and we have a backing object,
             // then we set the value there first and observe the result.
             let new_last_index = RegExpLastIndex::from_value(value);
@@ -368,7 +371,7 @@ impl<'a> InternalMethods<'a> for RegExp<'a> {
         receiver: Value,
         gc: GcScope<'gc, '_>,
     ) -> JsResult<'gc, bool> {
-        if property_key == BUILTIN_STRING_MEMORY.lastIndex.into() {
+        if property_key == BUILTIN_STRING_MEMORY.lastIndex.into() && receiver == self.into() {
             // Note: lastIndex is an unconfigurable data property: It cannot
             // become a getter or setter and will thus never call into
             // JavaScript.
