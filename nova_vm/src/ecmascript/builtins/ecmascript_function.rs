@@ -24,7 +24,8 @@ use crate::{
     engine::{Bindable, Executable, GcScope, NoGcScope, Scopable, bindable_handle},
     heap::{
         ArenaAccess, ArenaAccessMut, BaseIndex, CompactionLists, CreateHeapData, Heap,
-        HeapMarkAndSweep, HeapSweepWeakReference, WorkQueues, arena_vec_access,
+        HeapMarkAndSweep, HeapSweepWeakReference, ObjectEntry, ObjectEntryPropertyDescriptor,
+        WorkQueues, arena_vec_access,
     },
     ndt,
 };
@@ -399,13 +400,11 @@ impl<'a> FunctionInternalProperties<'a> for ECMAScriptFunction<'a> {
             let intrinsics = realm.get(agent).intrinsics();
             // SAFETY: reference is dropped before next GC safepoint.
             let f = unsafe { self.get_ast_unbound(agent) };
-            let proto = match (f.is_async(), f.is_generator()) {
-                (false, false) => intrinsics.function_prototype().into(),
-                (false, true) => intrinsics.generator_function_prototype().into(),
-                (true, false) => intrinsics.async_function_prototype().into(),
-                (true, true) => intrinsics.async_generator_function_prototype().into(),
-            };
-            Some(proto)
+            Some(default_function_prototype(
+                intrinsics,
+                f.is_async(),
+                f.is_generator(),
+            ))
         }
     }
 
@@ -891,27 +890,50 @@ pub(crate) fn ordinary_function_create<'gc>(
         compiled_bytecode: None,
         name: None,
     };
+    // 21. Let len be the ExpectedArgumentCount of ParameterList.
+    let len = expected_arguments_count(params.ast.formal_parameters());
+    // 22. Perform SetFunctionLength(F, len).
+    set_ecmascript_function_length(agent, &mut function, len, gc).unwrap();
+    // Note: A function whose prototype is the default for its kind in the
+    // current realm needs no backing object.
     if let Some(function_prototype) = params.function_prototype
         && function_prototype
-            != agent
-                .current_realm_record()
-                .intrinsics()
-                .function_prototype()
-                .into()
+            != default_function_prototype(
+                agent.current_realm_record().intrinsics(),
+                params.ast.is_async(),
+                params.ast.is_generator(),
+            )
     {
+        // The backing object must carry the "length" and "name" properties as
+        // it replaces the lazy ones; SetFunctionName updates "name" later.
+        let entry = |key: PropertyKey<'static>, value: Value<'static>| ObjectEntry {
+            key,
+            value: ObjectEntryPropertyDescriptor::Data {
+                value,
+                writable: false,
+                enumerable: false,
+                configurable: true,
+            },
+        };
         function.object_index = Some(
-            OrdinaryObject::create_object(agent, Some(function_prototype), &[])
-                .expect("Should perform GC here"),
+            OrdinaryObject::create_object(
+                agent,
+                Some(function_prototype),
+                &[
+                    entry(BUILTIN_STRING_MEMORY.length.into(), function.length.into()),
+                    entry(
+                        BUILTIN_STRING_MEMORY.name.into(),
+                        String::EMPTY_STRING.into(),
+                    ),
+                ],
+            )
+            .expect("Should perform GC here"),
         );
     }
 
     // 18. Set F.[[Fields]] to a new empty List.
     // 19. Set F.[[PrivateMethods]] to a new empty List.
     // 20. Set F.[[ClassFieldInitializerName]] to EMPTY.
-    // 21. Let len be the ExpectedArgumentCount of ParameterList.
-    let len = expected_arguments_count(params.ast.formal_parameters());
-    // 22. Perform SetFunctionLength(F, len).
-    set_ecmascript_function_length(agent, &mut function, len, gc).unwrap();
     // 23. Return F.
     agent.heap.create(function)
 }
@@ -1156,12 +1178,46 @@ pub(crate) fn set_function_name<'a>(
             assert!(function.name.is_none());
             // 6. Perform ! DefinePropertyOrThrow(F, "name", PropertyDescriptor { [[Value]]: name, [[Writable]]: false, [[Enumerable]]: false, [[Configurable]]: true }).
             function.name = Some(name.unbind());
+            // Note: A backing object created up front holds a "name" entry.
+            if let Some(backing_object) = function.object_index {
+                backing_object
+                    .property_storage()
+                    .set(
+                        agent,
+                        idx.into(),
+                        BUILTIN_STRING_MEMORY.name.into(),
+                        PropertyDescriptor {
+                            value: Some(name.into()),
+                            writable: Some(false),
+                            enumerable: Some(false),
+                            configurable: Some(true),
+                            ..Default::default()
+                        },
+                        gc,
+                    )
+                    .expect("Failed to allocate memory for function name");
+            }
             // 7. Return UNUSED.
         }
         Function::BuiltinConstructorFunction(_)
         | Function::BuiltinPromiseResolvingFunction(_)
         | Function::BuiltinPromiseFinallyFunction(_)
         | Function::BuiltinProxyRevokerFunction => unreachable!(),
+    }
+}
+
+/// The \[\[Prototype]] of an ECMAScript function of the given kind when no
+/// other prototype was chosen.
+fn default_function_prototype(
+    intrinsics: &crate::ecmascript::Intrinsics,
+    is_async: bool,
+    is_generator: bool,
+) -> Object<'static> {
+    match (is_async, is_generator) {
+        (false, false) => intrinsics.function_prototype().into(),
+        (false, true) => intrinsics.generator_function_prototype().into(),
+        (true, false) => intrinsics.async_function_prototype().into(),
+        (true, true) => intrinsics.async_generator_function_prototype().into(),
     }
 }
 
