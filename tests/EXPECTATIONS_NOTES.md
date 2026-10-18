@@ -16,3 +16,12 @@ known deviations are recorded here.
 - `built-ins/Object/defineProperty/15.2.3.6-4-116.js` (FAIL, TIMEOUT on slow
   machines): `verifyProperty` sets an array's `length` to 2**32-1 and back, and
   shrinking walks every index. Already slow at bece61ac.
+
+## Annex B and intl402
+
+`skip.json` skips `annexB` and `intl402`, so `metrics.json` counts neither.
+`metrics-annexb.json` records a one-off run of `annexB` alone with the
+`annex-b` features on (vano 9e158aac, test262 e0d8f66a, 2026-10-18): 576 of
+1,086 pass. It is not CI-gated and the CI gate is unchanged. There is no Intl,
+so intl402 is not measured.
+
