@@ -1,17 +1,32 @@
 {
   "//": [
-    "One-off Annex B measurement, not CI-gated. metrics.json stays the gate.",
-    "Measured 2026-10-18 on vano 9e158aac with test262 e0d8f66a (tests/test262),",
-    "default nova_vm features (annex-b on), `annexB` removed from skip.json,",
-    "run as `test262 annexB` with dev-fast. Only annexB/ is counted here."
+    "One-off counts for the suites skip.json leaves out. Not CI-gated:",
+    "metrics.json stays the gate. Measured 2026-10-18 on vano 9e158aac with",
+    "test262 e0d8f66a (tests/test262), default nova_vm features (annex-b on),",
+    "dev-fast, with the suite's entry removed from skip.json and the runner given",
+    "that suite's directory as its only filter. vano has no Intl, so intl402",
+    "is expected to fail almost entirely."
   ],
-  "results": {
-    "crash": 2,
-    "fail": 508,
-    "pass": 576,
-    "skip": 0,
-    "timeout": 0,
-    "unresolved": 0
+  "annexB": {
+    "results": {
+      "crash": 2,
+      "fail": 508,
+      "pass": 576,
+      "skip": 0,
+      "timeout": 0,
+      "unresolved": 0
+    },
+    "total": 1086
   },
-  "total": 1086
+  "intl402": {
+    "results": {
+      "crash": 2,
+      "fail": 1565,
+      "pass": 25,
+      "skip": 0,
+      "timeout": 0,
+      "unresolved": 0
+    },
+    "total": 1592
+  }
 }

@@ -19,9 +19,8 @@ known deviations are recorded here.
 
 ## Annex B and intl402
 
-`skip.json` skips `annexB` and `intl402`, so `metrics.json` counts neither.
-`metrics-annexb.json` records a one-off run of `annexB` alone with the
-`annex-b` features on (vano 9e158aac, test262 e0d8f66a, 2026-10-18): 576 of
-1,086 pass. It is not CI-gated and the CI gate is unchanged. There is no Intl,
-so intl402 is not measured.
-
+`skip.json` skips `annexB` and `intl402`, so `metrics.json` counts neither as
+run. `metrics-skipped.json` records a one-off run of each with the `annex-b`
+features on (vano 9e158aac, test262 e0d8f66a, 2026-10-18): annexB 576 of 1,086
+pass, intl402 25 of 1,592 (there is no Intl). It is not CI-gated and the CI
+gate is unchanged.
