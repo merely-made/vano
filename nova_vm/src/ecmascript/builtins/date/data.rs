@@ -5,7 +5,7 @@
 use std::time::SystemTime;
 
 use crate::{
-    ecmascript::{OrdinaryObject, SmallInteger, Value},
+    ecmascript::{Agent, OrdinaryObject, SmallInteger, Value},
     engine::bindable_handle,
     heap::{CompactionLists, HeapMarkAndSweep, WorkQueues},
 };
@@ -42,7 +42,10 @@ impl DateValue {
         self.get_i64().map(|v| v as f64)
     }
 
-    pub(crate) fn now() -> Self {
+    pub(crate) fn now(agent: &Agent) -> Self {
+        if let Some(now) = agent.host_hooks.system_time_millis() {
+            return Self::time_clip(now as f64);
+        }
         let now = SystemTime::now();
         let now = now
             .duration_since(SystemTime::UNIX_EPOCH)

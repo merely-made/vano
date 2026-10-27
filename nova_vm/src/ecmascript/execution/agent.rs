@@ -703,6 +703,14 @@ pub trait HostHooks: core::fmt::Debug {
     fn get_host_data(&self) -> &dyn Any {
         unimplemented!()
     }
+
+    /// The current time value for `Date`, in milliseconds since the Unix
+    /// epoch. `None`, the default, reads the system clock; a host returns its
+    /// own clock here when `Date` must follow it. Values outside the ECMAScript
+    /// time range produce an invalid date.
+    fn system_time_millis(&self) -> Option<i64> {
+        None
+    }
 }
 
 /// # Owned ECMAScript [`Agent`]

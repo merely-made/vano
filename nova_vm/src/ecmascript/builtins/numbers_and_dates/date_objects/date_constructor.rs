@@ -2,14 +2,12 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-use std::time::SystemTime;
-
 use crate::{
     ecmascript::{
         Agent, ArgumentsList, BUILTIN_STRING_MEMORY, Behaviour, Builtin,
-        BuiltinIntrinsicConstructor, Date, DateValue, Function, JsResult, Number, Object,
-        ProtoIntrinsics, Realm, SmallInteger, String, Value, builders::BuiltinFunctionBuilder,
-        ordinary_create_from_constructor, to_number, to_primitive,
+        BuiltinIntrinsicConstructor, Date, DateValue, Function, JsResult, Object, ProtoIntrinsics,
+        Realm, String, Value, builders::BuiltinFunctionBuilder, ordinary_create_from_constructor,
+        to_number, to_primitive,
     },
     engine::{Bindable, GcScope, Scopable},
     heap::{ArenaAccessMut, IntrinsicConstructorIndexes},
@@ -67,7 +65,7 @@ impl DateConstructor {
         // 1. If NewTarget is undefined, then
         let Some(new_target) = new_target else {
             // a. Let now be the time value (UTC) identifying the current time.
-            let now = DateValue::now();
+            let now = DateValue::now(agent);
             // b. Return ToDateString(now).
             return Ok(Value::from_string(
                 agent,
@@ -81,7 +79,7 @@ impl DateConstructor {
             // 3. If numberOfArgs = 0, then
             0 => {
                 // a. Let dv be the time value (UTC) identifying the current time.
-                DateValue::now()
+                DateValue::now(agent)
             }
             // 4. Else if numberOfArgs = 1, then
             1 => {
@@ -194,21 +192,12 @@ impl DateConstructor {
     ///
     /// This function returns the time value designating the UTC date and time of the occurrence of the call to it.
     fn now<'gc>(
-        _agent: &mut Agent,
+        agent: &mut Agent,
         _this_value: Value,
         _arguments: ArgumentsList,
         _gc: GcScope<'gc, '_>,
     ) -> JsResult<'gc, Value<'gc>> {
-        let time_value = SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .unwrap()
-            .as_millis();
-        assert_eq!(time_value as u64 as u128, time_value);
-        let time_value = time_value as u64;
-        Ok(
-            Number::from(SmallInteger::try_from(time_value).expect("SystemTime is beyond range"))
-                .into(),
-        )
+        Ok(DateValue::now(agent).into())
     }
 
     /// ### [21.4.3.2 Date.parse ( string )](https://tc39.es/ecma262/#sec-date.parse)
