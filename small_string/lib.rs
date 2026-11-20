@@ -219,7 +219,7 @@ impl SmallString {
     /// surrogate pair, or is out of bounds.
     pub fn utf8_index(&self, utf16_idx: usize) -> Option<usize> {
         if self.is_ascii() {
-            return Some(utf16_idx);
+            return (utf16_idx <= self.len()).then_some(utf16_idx);
         }
         // Walk code points, tracking the running WTF-8 *byte* offset and the
         // running WTF-16 code-unit index in parallel. The byte offset is the
@@ -245,12 +245,7 @@ impl SmallString {
                 }
             }
         }
-        if current_utf16_index > utf16_idx {
-            return None;
-        }
-        debug_assert_eq!(utf16_idx, current_utf16_index);
-        debug_assert_eq!(byte_index, self.len());
-        Some(self.len())
+        (current_utf16_index == utf16_idx).then_some(byte_index)
     }
 
     /// Get the corresponding WTF-16 code unit index for a given UTF-8 code
@@ -671,4 +666,16 @@ fn utf8_index_maps_utf16_units_to_byte_offsets() {
     assert_eq!(s.utf8_index(0), Some(0));
     assert_eq!(s.utf8_index(1), None); // mid-pair
     assert_eq!(s.utf8_index(2), Some(4)); // end
+}
+
+#[test]
+fn utf8_indexing() {
+    let unicode = "あ<";
+    let str = SmallString::try_from(unicode).unwrap();
+    assert_eq!(str.len(), 4);
+    assert_eq!(str, unicode);
+    assert_eq!(str.utf8_index(0), Some(0));
+    assert_eq!(str.utf8_index(1), Some(3));
+    assert_eq!(str.utf8_index(2), Some(4)); // end boundary
+    assert_eq!(str.utf8_index(3), None);
 }

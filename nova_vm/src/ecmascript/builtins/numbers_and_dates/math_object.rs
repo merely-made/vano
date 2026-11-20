@@ -1225,10 +1225,9 @@ impl MathObject {
             // We may have got the maximum f64 from the heap and now we push it
             // back there without reusing the original Number. This just makes
             // the code simpler.
-            if highest_i64 != i64::MIN {
-                // b. If n is +0𝔽 and highest is -0𝔽, set highest to +0𝔽.
-                // Note: This happens automatically as +0.max(-0) is +0.
-                highest_f64 = (highest_i64 as f64).max(highest_f64);
+            if highest_i64 != i64::MIN && highest_i64 as f64 >= highest_f64 {
+                // Prefer the integer on ties so +0 wins over -0 on every target.
+                highest_f64 = highest_i64 as f64;
             }
             let result = Number::from_f64(agent, highest_f64, gc.nogc());
             Ok(result.unbind().into())

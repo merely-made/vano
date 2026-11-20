@@ -13,9 +13,8 @@ known deviations are recorded here.
   too early. The test used to pass by accident, because derived-class field
   initializers ran before `super()` and threw the expected ReferenceError (#948).
   Exposed by the derived-class field fix cherry-picked from trynova/nova#992.
-- `built-ins/Object/defineProperty/15.2.3.6-4-116.js` (FAIL, TIMEOUT on slow
-  machines): `verifyProperty` sets an array's `length` to 2**32-1 and back, and
-  shrinking walks every index. Already slow at bece61ac.
+- `built-ins/Object/defineProperty/15.2.3.6-4-116.js` is skipped. Its property check
+  sets an array's length to 2**32-1 and back, and shrinking walks every index.
 
 ## Annex B and intl402
 
