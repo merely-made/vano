@@ -213,11 +213,11 @@ impl ArrayBufferPrototype {
         }
         // 7. Let hostHandled be ? HostResizeArrayBuffer(O, newByteLength).
         let hooks = agent.host_hooks;
-        let handled =
-            match hooks.resize_array_buffer(agent, o.unbind(), new_byte_length, gc.nogc()) {
-                Ok(handled) => handled,
-                Err(error) => return Err(error.unbind()),
-            };
+        let handled = match hooks.resize_array_buffer(agent, o.unbind(), new_byte_length, gc.nogc())
+        {
+            Ok(handled) => handled,
+            Err(error) => return Err(error.unbind()),
+        };
         // 8. If hostHandled is handled, return undefined.
         if handled == ResizeArrayBufferResult::Handled {
             return Ok(Value::Undefined);
