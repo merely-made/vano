@@ -36,6 +36,7 @@ use num_traits::Num;
 use oxc_ast::ast;
 use oxc_ecmascript::BoundNames;
 use oxc_semantic::{NodeId, ScopeFlags, SymbolFlags};
+use oxc_span::GetSpan;
 use oxc_syntax::operator::{BinaryOperator, UnaryOperator};
 use template_literals::get_template_object;
 use wtf8::{CodePoint, Wtf8Buf};
@@ -880,7 +881,15 @@ impl<'a, 's, 'gc, 'scope> CompileEvaluation<'a, 's, 'gc, 'scope> for ast::Identi
                         while decl_id < node {
                             node = nodes.parent_id(node);
                         }
-                        if decl_id == node {
+                        if decl_id == node
+                            && reference_in_own_declaration_is_tdz(
+                                nodes,
+                                decl_id,
+                                ref_id,
+                                scoping.symbol_span(s),
+                                is_lexical,
+                            )
+                        {
                             // Self-referential declaration.
                             VariableKind::TemporalDeadZone
                         } else {
@@ -920,6 +929,52 @@ impl<'a, 's, 'gc, 'scope> CompileEvaluation<'a, 's, 'gc, 'scope> for ast::Identi
         };
         kind.compile(ctx, &self.name)
     }
+}
+
+/// Whether a reference inside a variable's own declaration runs before the
+/// variable is initialized.
+///
+/// oxc gives a destructured variable's whole declarator as its declaration, so
+/// `b = a` in `const [a, b = a] = x` is inside `a`'s declaration, but it runs
+/// after `a` is bound. A pattern binds in source order after the initializer
+/// runs, so a reference is in the TDZ if it is in the initializer, comes before
+/// the binding, or is in the binding's own default. `var` has no TDZ at all.
+/// Declarations other than variable declarators (parameters among them) keep
+/// the conservative answer.
+fn reference_in_own_declaration_is_tdz(
+    nodes: &oxc_semantic::AstNodes,
+    decl_id: NodeId,
+    ref_id: NodeId,
+    binding: oxc_span::Span,
+    is_lexical: bool,
+) -> bool {
+    let oxc_ast::AstKind::VariableDeclarator(declarator) = nodes.get_node(decl_id).kind() else {
+        return true;
+    };
+    if !is_lexical {
+        return false;
+    }
+    let reference = nodes.get_node(ref_id).kind().span();
+    if declarator
+        .init
+        .as_ref()
+        .is_some_and(|init| init.span().contains_inclusive(reference))
+    {
+        return true;
+    }
+    if reference.start < binding.start {
+        return true;
+    }
+    let mut node = ref_id;
+    while node != decl_id {
+        if let oxc_ast::AstKind::AssignmentPattern(pattern) = nodes.get_node(node).kind()
+            && pattern.left.span().contains_inclusive(binding)
+        {
+            return true;
+        }
+        node = nodes.parent_id(node);
+    }
+    false
 }
 
 /// Formal parameter lists also have a temporal dead-zone; when the list does

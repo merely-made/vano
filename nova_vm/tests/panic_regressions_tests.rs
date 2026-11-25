@@ -63,6 +63,88 @@ fn unescape_finds_every_escape_after_the_first() {
     agent.remove_realm(realm);
 }
 
+/// A function that runs `declaration` and reports whether it threw a
+/// ReferenceError, as source evaluating to a boolean.
+fn tdz(declaration: &str) -> &'static str {
+    let source = format!(
+        "(() => {{ try {{ {declaration} return false; }} catch (e) {{ return e instanceof ReferenceError; }} }})()"
+    );
+    Box::leak(source.into_boxed_str())
+}
+
+/// A destructuring default can read a binding the same declaration made
+/// earlier: `b = a` runs after `a` is initialized. Reads before a binding is
+/// made still throw.
+#[test]
+fn destructuring_defaults_read_earlier_bindings() {
+    let cases = [
+        ("top-level const array", "const [a, b = a] = [1]; b === 1"),
+        (
+            "top-level let object",
+            "let { a, b = a } = { a: 2 }; b === 2",
+        ),
+        (
+            "function const array",
+            "(() => { const [a, b = a] = [3]; return b; })() === 3",
+        ),
+        (
+            "function let object",
+            "(() => { let { a, b = a + 1 } = { a: 3 }; return b; })() === 4",
+        ),
+        (
+            "function var array",
+            "(() => { var [a, b = a] = [5]; return b; })() === 5",
+        ),
+        (
+            "for-of const",
+            "(() => { for (const [a, b = a] of [[6]]) return b; })() === 6",
+        ),
+        (
+            "block const",
+            "(() => { { const [a, b = a] = [7]; return b; } })() === 7",
+        ),
+        ("parameters", "((a, b = a) => b)(8) === 8"),
+        (
+            "var reads itself",
+            "(() => { var x = x; return x; })() === undefined",
+        ),
+        // These read a binding before it is made, and must still throw.
+        ("own default", tdz("const [a = a] = [];")),
+        ("later element", tdz("const [b = a, a] = [];")),
+        ("initializer", tdz("const [a] = [a];")),
+        ("object own default", tdz("let { a = a } = {};")),
+        ("computed key", tdz("const { [a]: a } = {};")),
+        ("plain initializer", tdz("const a = a;")),
+        (
+            "parameter own default",
+            "(() => { try { ((a = a) => a)(); } catch (e) { return e instanceof ReferenceError; } })()",
+        ),
+    ];
+    let mut failures = Vec::new();
+    for (name, source) in cases {
+        let mut agent = GcAgent::new(AgentOptions::default(), &DefaultHostHooks);
+        let realm = agent.create_default_realm();
+        agent.run_in_realm(&realm, |agent, mut gc| {
+            let source_text = JsString::from_string(agent, source.to_owned(), gc.nogc()).unbind();
+            let thrown = match agent.run_script(source_text, gc.reborrow()) {
+                Ok(Value::Boolean(true)) => None,
+                Ok(_) => Some(None),
+                Err(error) => Some(Some(error.unbind())),
+            };
+            match thrown {
+                None => {}
+                Some(None) => failures.push(format!("{name}: false")),
+                Some(Some(error)) => {
+                    let message = error.to_string(agent, gc.reborrow());
+                    failures.push(format!("{name}: {}", message.to_string_lossy(agent)));
+                }
+            }
+        });
+        agent.remove_realm(realm);
+    }
+    assert!(failures.is_empty(), "{failures:#?}");
+}
+
 #[derive(Default)]
 struct TestHostHooks {
     promise_jobs: RefCell<VecDeque<Job>>,
