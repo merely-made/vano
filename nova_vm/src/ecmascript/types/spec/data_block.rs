@@ -170,6 +170,12 @@ impl DataBlock {
         }
     }
 
+    /// Whether an embedder owns the bytes.
+    #[inline(always)]
+    pub(crate) fn is_foreign(&self) -> bool {
+        self.foreign
+    }
+
     #[inline(always)]
     pub(crate) fn is_detached(&self) -> bool {
         self.ptr.is_none()

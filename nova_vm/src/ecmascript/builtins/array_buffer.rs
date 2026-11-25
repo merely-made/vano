@@ -48,6 +48,25 @@ pub struct ArrayBuffer<'a>(BaseIndex<'a, ArrayBufferHeapData<'static>>);
 array_buffer_handle!(ArrayBuffer);
 arena_vec_access!(ArrayBuffer, 'a, ArrayBufferHeapData, array_buffers);
 
+/// A block over embedder-owned bytes; `None` if `ptr` is not aligned to 8.
+/// A zero-length block uses an aligned dangling pointer instead of `ptr`.
+///
+/// ## Safety
+///
+/// `ptr` must be valid for reads and writes of `byte_length` bytes for as long
+/// as the block is in use.
+unsafe fn foreign_block(ptr: NonNull<u8>, byte_length: usize) -> Option<DataBlock> {
+    let ptr = if byte_length == 0 {
+        NonNull::<u64>::dangling().cast::<u8>()
+    } else if ptr.align_offset(8) != 0 {
+        return None;
+    } else {
+        ptr
+    };
+    // SAFETY: aligned, and valid for `byte_length` bytes by the contract.
+    Some(unsafe { DataBlock::foreign(ptr, byte_length) })
+}
+
 impl<'ab> ArrayBuffer<'ab> {
     /// Allocate a new ArrayBuffer with the given byte length.
     pub fn new<'gc>(
@@ -76,8 +95,9 @@ impl<'ab> ArrayBuffer<'ab> {
     /// ## Safety
     ///
     /// `ptr` must be valid for reads and writes of `byte_length` bytes until
-    /// the buffer is detached. The embedder must detach it before those bytes
-    /// move or are freed, and must hold no reference to them while script runs.
+    /// the buffer is detached or repointed. The embedder must detach or
+    /// repoint it before those bytes move or are freed, and must hold no
+    /// reference to them while script runs.
     pub unsafe fn new_over_foreign<'gc>(
         agent: &mut Agent,
         ptr: NonNull<u8>,
@@ -85,20 +105,95 @@ impl<'ab> ArrayBuffer<'ab> {
         key: DetachKey,
         gc: NoGcScope<'gc, '_>,
     ) -> Option<ArrayBuffer<'gc>> {
-        let block = if byte_length == 0 {
-            create_byte_data_block(agent, 0, gc).ok()?
-        } else if ptr.align_offset(8) != 0 {
+        // SAFETY: the caller's contract.
+        let block = unsafe { foreign_block(ptr, byte_length) }?;
+        Some(Self::new_foreign(
+            agent,
+            InternalBuffer::fixed_length(block),
+            key,
+            gc,
+        ))
+    }
+
+    /// As [`new_over_foreign`](Self::new_over_foreign), but resizable up to
+    /// `max_byte_length`. Script's `resize` reaches the embedder through
+    /// [`HostHooks::resize_array_buffer`]; an unhandled resize throws, since
+    /// the engine cannot reallocate bytes it does not own.
+    ///
+    /// Returns `None` if `ptr` is not aligned to 8 or `byte_length` exceeds
+    /// `max_byte_length`.
+    ///
+    /// ## Safety
+    ///
+    /// As for [`new_over_foreign`](Self::new_over_foreign).
+    ///
+    /// [`HostHooks::resize_array_buffer`]: crate::ecmascript::HostHooks::resize_array_buffer
+    pub unsafe fn new_over_foreign_resizable<'gc>(
+        agent: &mut Agent,
+        ptr: NonNull<u8>,
+        byte_length: usize,
+        max_byte_length: usize,
+        key: DetachKey,
+        gc: NoGcScope<'gc, '_>,
+    ) -> Option<ArrayBuffer<'gc>> {
+        if byte_length > max_byte_length || max_byte_length == usize::MAX {
             return None;
-        } else {
-            // SAFETY: the caller's contract, and the alignment checked above.
-            unsafe { DataBlock::foreign(ptr, byte_length) }
+        }
+        // SAFETY: the caller's contract.
+        let block = unsafe { foreign_block(ptr, byte_length) }?;
+        let buffer = InternalBuffer::resizable(block, max_byte_length);
+        Some(Self::new_foreign(agent, buffer, key, gc))
+    }
+
+    fn new_foreign<'gc>(
+        agent: &mut Agent,
+        buffer: InternalBuffer,
+        key: DetachKey,
+        gc: NoGcScope<'gc, '_>,
+    ) -> ArrayBuffer<'gc> {
+        let data = ArrayBufferHeapData {
+            object_index: None,
+            buffer,
         };
-        let buffer: ArrayBuffer = agent
-            .heap
-            .create(ArrayBufferHeapData::new_fixed_length(block));
-        buffer.create_backing_object(agent);
-        buffer.set_detach_key(agent, key);
-        Some(buffer.bind(gc))
+        let created: ArrayBuffer = agent.heap.create(data);
+        created.create_backing_object(agent);
+        created.set_detach_key(agent, key);
+        created.bind(gc)
+    }
+
+    /// Point a buffer made over embedder-owned bytes at `byte_length` bytes at
+    /// `ptr`, keeping its identity, as after the embedder moved or grew them.
+    /// Returns `false`, changing nothing, if the buffer is detached or not
+    /// over embedder-owned bytes, if `ptr` is not aligned to 8, or if a
+    /// resizable buffer's maximum is exceeded.
+    ///
+    /// ## Safety
+    ///
+    /// As for [`new_over_foreign`](Self::new_over_foreign), for the new bytes.
+    pub unsafe fn repoint_foreign(
+        self,
+        agent: &mut Agent,
+        ptr: NonNull<u8>,
+        byte_length: usize,
+    ) -> bool {
+        let data = self.get_mut(agent);
+        if !data.get_data_block().is_foreign() {
+            return false;
+        }
+        if data.is_resizable() && byte_length > data.max_byte_length() {
+            return false;
+        }
+        // SAFETY: the caller's contract.
+        let Some(block) = (unsafe { foreign_block(ptr, byte_length) }) else {
+            return false;
+        };
+        *data.get_data_block_mut() = block;
+        true
+    }
+
+    /// Whether this buffer's bytes belong to the embedder.
+    pub fn is_foreign(self, agent: &Agent) -> bool {
+        self.get(agent).get_data_block().is_foreign()
     }
 
     /// Returns `true` if this ArrayBuffer is detached.

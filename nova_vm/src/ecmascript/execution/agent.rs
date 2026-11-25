@@ -21,6 +21,8 @@
 
 use ahash::AHashMap;
 
+#[cfg(feature = "array-buffer")]
+use crate::ecmascript::ArrayBuffer;
 #[cfg(test)]
 use crate::ecmascript::GlobalEnvironment;
 #[cfg(feature = "shared-array-buffer")]
@@ -404,6 +406,19 @@ pub enum GrowSharedArrayBufferResult {
     Handled = 1,
 }
 
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+#[cfg(feature = "array-buffer")]
+/// Result of the [HostResizeArrayBuffer] embedder hook.
+///
+/// [HostResizeArrayBuffer]: https://tc39.es/ecma262/#sec-hostresizearraybuffer
+pub enum ResizeArrayBufferResult {
+    /// The embedder did not handle resizing this ArrayBuffer.
+    #[default]
+    Unhandled = 0,
+    /// The embedder resized this ArrayBuffer.
+    Handled = 1,
+}
+
 /// Trait the Nova JavaScript engine to interact with the embedder. The embedder
 /// calls methods are defined by the ECMAScript specification.
 pub trait HostHooks: core::fmt::Debug {
@@ -692,6 +707,26 @@ pub trait HostHooks: core::fmt::Debug {
         gc: NoGcScope<'gc, '_>,
     ) -> JsResult<'gc, GrowSharedArrayBufferResult> {
         Ok(GrowSharedArrayBufferResult::Unhandled)
+    }
+
+    /// ### [25.1.3.7 HostResizeArrayBuffer ( buffer, newByteLength )](https://tc39.es/ecma262/#sec-hostresizearraybuffer)
+    ///
+    /// Called by `ArrayBuffer.prototype.resize` once `newByteLength` is known
+    /// to be within the buffer's maximum. An embedder that owns the buffer's
+    /// bytes (see [`ArrayBuffer::new_over_foreign_resizable`]) resizes it here
+    /// and returns `Handled`; the default leaves the resize to the engine.
+    ///
+    /// [`ArrayBuffer::new_over_foreign_resizable`]: crate::ecmascript::ArrayBuffer::new_over_foreign_resizable
+    #[allow(unused_variables)]
+    #[cfg(feature = "array-buffer")]
+    fn resize_array_buffer<'gc>(
+        &self,
+        agent: &mut Agent,
+        buffer: ArrayBuffer,
+        new_byte_length: usize,
+        gc: NoGcScope<'gc, '_>,
+    ) -> JsResult<'gc, ResizeArrayBufferResult> {
+        Ok(ResizeArrayBufferResult::Unhandled)
     }
 
     /// Get access to the Host data, useful to share state between calls of

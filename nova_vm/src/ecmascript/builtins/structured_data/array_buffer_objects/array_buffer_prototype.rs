@@ -6,9 +6,10 @@ use crate::{
     ecmascript::{
         Agent, AnyArrayBuffer, ArgumentsList, ArrayBuffer, BUILTIN_STRING_MEMORY, Behaviour,
         Builtin, BuiltinGetter, ExceptionType, Function, JsResult, PropertyKey, ProtoIntrinsics,
-        Realm, String, Value, allocate_array_buffer, builders::OrdinaryObjectBuilder, construct,
-        detach_array_buffer, is_detached_buffer, is_fixed_length_array_buffer, species_constructor,
-        to_index, to_integer_or_infinity, try_result_into_js, try_to_index,
+        Realm, ResizeArrayBufferResult, String, Value, allocate_array_buffer,
+        builders::OrdinaryObjectBuilder, construct, detach_array_buffer, is_detached_buffer,
+        is_fixed_length_array_buffer, species_constructor, to_index, to_integer_or_infinity,
+        try_result_into_js, try_to_index,
     },
     engine::{Bindable, GcScope, NoGcScope, Scopable},
     heap::WellKnownSymbols,
@@ -211,8 +212,24 @@ impl ArrayBufferPrototype {
             ));
         }
         // 7. Let hostHandled be ? HostResizeArrayBuffer(O, newByteLength).
+        let hooks = agent.host_hooks;
+        let handled =
+            match hooks.resize_array_buffer(agent, o.unbind(), new_byte_length, gc.nogc()) {
+                Ok(handled) => handled,
+                Err(error) => return Err(error.unbind()),
+            };
         // 8. If hostHandled is handled, return undefined.
-        // TODO: HostResizeArrayBuffer
+        if handled == ResizeArrayBufferResult::Handled {
+            return Ok(Value::Undefined);
+        }
+        // The engine cannot reallocate bytes an embedder owns.
+        if o.is_foreign(agent) {
+            return Err(agent.throw_exception_with_static_message(
+                ExceptionType::TypeError,
+                "This ArrayBuffer's bytes belong to the host, which did not resize it",
+                gc.into_nogc(),
+            ));
+        }
 
         // 9. Let oldBlock be O.[[ArrayBufferData]].
         // 10. Let newBlock be ? CreateByteDataBlock(newByteLength).
