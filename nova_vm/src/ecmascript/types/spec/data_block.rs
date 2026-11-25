@@ -53,9 +53,14 @@ use crate::ecmascript::execution::ProtoIntrinsics;
 /// The `ptr` points to a continuous buffer of bytes, the length of which is
 /// determined by the capacity. The pointer can be None if the block is
 /// detached.
+///
+/// A foreign block's bytes belong to an embedder, who must detach every buffer
+/// over them before they move or are freed; such a block never frees or
+/// reallocates its pointer, and a clone of it is an ordinary owned copy.
 pub(crate) struct DataBlock {
     ptr: Option<NonNull<u8>>,
     byte_length: usize,
+    foreign: bool,
 }
 trivially_bindable!(DataBlock);
 
@@ -72,6 +77,9 @@ impl core::fmt::Debug for DataBlock {
 
 impl Drop for DataBlock {
     fn drop(&mut self) {
+        if self.foreign {
+            return;
+        }
         if let Some(ptr) = self.ptr {
             if self.byte_length == 0 {
                 // dangling data block; don't dealloc.
@@ -138,13 +146,29 @@ impl DataBlock {
     pub(crate) const DETACHED_DATA_BLOCK: DataBlock = DataBlock {
         ptr: None,
         byte_length: 0,
+        foreign: false,
     };
 
     /// An empty DataBlock.
     const EMPTY_DATA_BLOCK: DataBlock = DataBlock {
         ptr: Some(NonNull::<usize>::dangling().cast::<u8>()),
         byte_length: 0,
+        foreign: false,
     };
+
+    /// A block over `byte_length` bytes at `ptr` that an embedder owns.
+    ///
+    /// ## Safety
+    ///
+    /// `ptr` must be aligned to 8 and valid for reads and writes of
+    /// `byte_length` bytes for as long as any buffer holds the block.
+    pub(crate) const unsafe fn foreign(ptr: NonNull<u8>, byte_length: usize) -> Self {
+        Self {
+            ptr: Some(ptr),
+            byte_length,
+            foreign: true,
+        }
+    }
 
     #[inline(always)]
     pub(crate) fn is_detached(&self) -> bool {
@@ -166,6 +190,7 @@ impl DataBlock {
             Some(Self {
                 ptr: Some(ptr),
                 byte_length: len,
+                foreign: false,
             })
         }
     }
@@ -339,6 +364,7 @@ impl DataBlock {
     }
 
     pub(crate) fn realloc(&mut self, new_byte_length: usize) {
+        assert!(!self.foreign, "a foreign DataBlock is never reallocated");
         // Max byte length should be within safe integer length.
         debug_assert!(new_byte_length < 2usize.pow(53));
         let ptr = if let Some(ptr) = self.ptr {

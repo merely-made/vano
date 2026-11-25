@@ -18,6 +18,8 @@ use crate::{
 };
 
 // TODO: Implement the contents of the `DetachKey` struct?
+/// An ArrayBuffer's \[\[ArrayBufferDetachKey]]. A buffer that has one cannot
+/// be transferred, and only a detach that presents it succeeds.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, PartialOrd, Ord)]
 pub struct DetachKey {}
 

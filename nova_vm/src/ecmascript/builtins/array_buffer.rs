@@ -7,8 +7,9 @@
 mod abstract_operations;
 mod data;
 
-use std::collections::hash_map::Entry;
+use std::{collections::hash_map::Entry, ptr::NonNull};
 
+pub use abstract_operations::DetachKey;
 pub(crate) use abstract_operations::*;
 pub(crate) use data::*;
 
@@ -20,8 +21,8 @@ use crate::{
     ecmascript::{
         Agent, JsResult, ProtoIntrinsics,
         types::{
-            ARRAY_BUFFER_DISCRIMINANT, InternalMethods, InternalSlots, Object, OrdinaryObject,
-            Value, Viewable, copy_data_block_bytes, create_byte_data_block,
+            ARRAY_BUFFER_DISCRIMINANT, DataBlock, InternalMethods, InternalSlots, Object,
+            OrdinaryObject, Value, Viewable, copy_data_block_bytes, create_byte_data_block,
         },
     },
     engine::{Bindable, HeapRootData, NoGcScope, bindable_handle},
@@ -61,6 +62,43 @@ impl<'ab> ArrayBuffer<'ab> {
             .create(ArrayBufferHeapData::new_fixed_length(block));
         buffer.create_backing_object(agent);
         Ok(buffer.bind(gc))
+    }
+
+    /// Make a fixed-length ArrayBuffer over `byte_length` bytes at `ptr` that
+    /// the embedder owns, as WebAssembly memory is. The buffer gets `key` as
+    /// its \[\[ArrayBufferDetachKey]], so script can neither transfer nor
+    /// detach it; the embedder detaches it with [`detach`](Self::detach).
+    ///
+    /// Returns `None` if `ptr` is not aligned to 8, which typed arrays over the
+    /// buffer require. A zero-length buffer does not use `ptr`, so any pointer
+    /// serves for one.
+    ///
+    /// ## Safety
+    ///
+    /// `ptr` must be valid for reads and writes of `byte_length` bytes until
+    /// the buffer is detached. The embedder must detach it before those bytes
+    /// move or are freed, and must hold no reference to them while script runs.
+    pub unsafe fn new_over_foreign<'gc>(
+        agent: &mut Agent,
+        ptr: NonNull<u8>,
+        byte_length: usize,
+        key: DetachKey,
+        gc: NoGcScope<'gc, '_>,
+    ) -> Option<ArrayBuffer<'gc>> {
+        let block = if byte_length == 0 {
+            create_byte_data_block(agent, 0, gc).ok()?
+        } else if ptr.align_offset(8) != 0 {
+            return None;
+        } else {
+            // SAFETY: the caller's contract, and the alignment checked above.
+            unsafe { DataBlock::foreign(ptr, byte_length) }
+        };
+        let buffer: ArrayBuffer = agent
+            .heap
+            .create(ArrayBufferHeapData::new_fixed_length(block));
+        buffer.create_backing_object(agent);
+        buffer.set_detach_key(agent, key);
+        Some(buffer.bind(gc))
     }
 
     /// Returns `true` if this ArrayBuffer is detached.
