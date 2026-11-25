@@ -39,6 +39,30 @@ fn tagged_template_installs_raw_on_its_existing_array_object() {
     agent.remove_realm(realm);
 }
 
+/// `unescape` located each `%` after the first at the wrong index: it panicked
+/// slicing backwards on some strings and silently skipped escapes on others.
+#[test]
+fn unescape_finds_every_escape_after_the_first() {
+    let mut agent = GcAgent::new(AgentOptions::default(), &DefaultHostHooks);
+    let realm = agent.create_default_realm();
+    agent.run_in_realm(&realm, |agent, gc| {
+        let result = run_script(
+            agent,
+            r#"[
+              ["yee%F0%90%90%B7eey", "yee\u00F0\u0090\u0090\u00B7eey"],
+              ["%F0%90%90%B7", "\u00F0\u0090\u0090\u00B7"],
+              ["a%u0041b%41c%u00e9", "aAbAc\u00E9"],
+              ["%%41", "%A"],
+              ["%zz%41%4", "%zzA%4"],
+              ["plain", "plain"],
+            ].every(([input, expected]) => unescape(input) === expected)"#,
+            gc,
+        );
+        assert_eq!(result, Value::Boolean(true));
+    });
+    agent.remove_realm(realm);
+}
+
 #[derive(Default)]
 struct TestHostHooks {
     promise_jobs: RefCell<VecDeque<Job>>,
