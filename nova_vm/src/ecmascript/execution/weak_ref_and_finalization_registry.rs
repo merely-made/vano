@@ -93,7 +93,8 @@ pub(crate) fn cleanup_finalization_registry<'gc>(
     //         a. Choose any such cell.
     //         b. Remove cell from finalizationRegistry.[[Cells]].
     //         c. Perform ? HostCallJobCallback(callback, undefined, « cell.[[HeldValue]] »).
-    if queue.len() == 1 {
+    // The popped value was the only one: call it without scoping the rest.
+    if queue.is_empty() {
         // 2. Return ? Call(jobCallback.[[Callback]], V, argumentsList).
         let _ = call_function(
             agent,
