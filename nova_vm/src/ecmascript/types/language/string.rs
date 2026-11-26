@@ -846,7 +846,7 @@ impl HeapMarkAndSweep for String<'static> {
 
 impl HeapMarkAndSweep for HeapString<'static> {
     fn mark_values(&self, queues: &mut WorkQueues) {
-        queues.strings.push(*self);
+        queues.mark_string(*self);
     }
 
     fn sweep_values(&mut self, compactions: &CompactionLists) {

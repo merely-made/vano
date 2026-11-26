@@ -26,11 +26,10 @@ use crate::{
         BoundFunction, BuiltinConstructorFunction, BuiltinFunction, BuiltinPromiseFinallyFunction,
         BuiltinPromiseResolvingFunction, DeclarativeEnvironment, ECMAScriptFunction,
         EmbedderObject, Environments, Error, FinalizationRegistry, FunctionEnvironment, Generator,
-        GlobalEnvironment, HeapBigInt, HeapNumber, HeapString, Map, MapIterator, Module,
-        ModuleEnvironment, ModuleRequest, ObjectEnvironment, ObjectShape, OrdinaryObject,
-        PrimitiveObject, PrivateEnvironment, Promise, PromiseGroup, PromiseReaction,
-        PropertyLookupCache, Proxy, Realm, Script, SourceCode, SourceTextModule, StringIterator,
-        Symbol,
+        GlobalEnvironment, HeapBigInt, HeapNumber, Map, MapIterator, Module, ModuleEnvironment,
+        ModuleRequest, ObjectEnvironment, ObjectShape, OrdinaryObject, PrimitiveObject,
+        PrivateEnvironment, Promise, PromiseGroup, PromiseReaction, PropertyLookupCache, Proxy,
+        Realm, Script, SourceCode, SourceTextModule, StringIterator, Symbol,
     },
     engine::{Bindable, Executable, GcScope},
     heap::{
@@ -128,7 +127,7 @@ pub(crate) fn heap_gc(agent: &mut Agent, root_realms: &mut [Option<Realm<'static
             shared_array_buffers,
             source_text_module_records,
             string_iterators,
-            strings,
+            strings: _,
             string_lookup_table: _,
             string_hasher: _,
             symbols,
@@ -856,17 +855,6 @@ pub(crate) fn heap_gc(agent: &mut Agent, root_realms: &mut [Option<Realm<'static
                 if bits.string_iterators.set_bit(index, &bits.bits) {
                     // Did mark.
                     string_iterators.get(index).mark_values(&mut queues);
-                }
-            });
-        }
-        if !queues.strings.is_empty() {
-            let mut string_marks: Box<[HeapString]> = queues.strings.drain(..).collect();
-            string_marks.sort();
-            string_marks.iter().for_each(|&idx| {
-                let index = idx.get_index();
-                if bits.strings.set_bit(index, &bits.bits) {
-                    // Did mark.
-                    strings.get(index).mark_values(&mut queues);
                 }
             });
         }
@@ -2142,6 +2130,52 @@ fn test_heap_gc() {
         "Global #1: {:#?}",
         agent.heap.globals.borrow().last().unwrap()
     );
+}
+
+#[test]
+fn string_keys_and_values_survive_compaction() {
+    use crate::{
+        ecmascript::{
+            AgentOptions, DefaultHostHooks, String, Value, try_get_ordinary_object_value,
+        },
+        engine::Global,
+        heap::ObjectEntry,
+    };
+
+    let mut agent = Agent::new(AgentOptions::default(), &DefaultHostHooks);
+    let (mut gc, mut scope) = unsafe { GcScope::create_root() };
+    let mut gc = GcScope::new(&mut gc, &mut scope);
+    let initial_strings = agent.heap.strings.len();
+    let dead_before = "discarded before key";
+    let dead_between = "discarded before value";
+    let retained_key = "retained property key";
+    let retained_value = "retained property value";
+    String::from_str(&mut agent, dead_before, gc.nogc());
+    let key = String::from_str(&mut agent, retained_key, gc.nogc());
+    String::from_str(&mut agent, dead_between, gc.nogc());
+    let value = String::from_str(&mut agent, retained_value, gc.nogc());
+    let object = OrdinaryObject::create_object(
+        &mut agent,
+        None,
+        &[ObjectEntry::new_data_entry(key.into(), value.into())],
+    )
+    .unwrap();
+    let root = Global::new(&agent, object.unbind());
+    assert_eq!(agent.heap.strings.len(), initial_strings + 4);
+
+    heap_gc(&mut agent, &mut [], gc.reborrow());
+    assert_eq!(agent.heap.strings.len(), initial_strings + 2);
+    let key = String::from_str(&mut agent, retained_key, gc.nogc());
+    let object = root.get(&agent, gc.nogc()).bind(gc.nogc());
+    let value = try_get_ordinary_object_value(&agent, object, key.into()).unwrap();
+    let Some(Value::String(value)) = value else {
+        panic!("the retained property must still contain a heap string");
+    };
+    assert_eq!(value.as_str(&agent), Some(retained_value));
+    assert_eq!(agent.heap.strings.len(), initial_strings + 2);
+    String::from_str(&mut agent, dead_before, gc.nogc());
+    String::from_str(&mut agent, dead_between, gc.nogc());
+    assert_eq!(agent.heap.strings.len(), initial_strings + 4);
 }
 
 #[test]

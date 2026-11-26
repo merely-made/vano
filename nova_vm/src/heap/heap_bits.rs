@@ -35,7 +35,7 @@ use crate::ecmascript::{TemporalDuration, TemporalInstant, TemporalPlainTime};
 use crate::ecmascript::{WeakMap, WeakRef, WeakSet};
 use crate::{
     ecmascript::{
-        Array, ArrayIterator, AsyncGenerator, AwaitReaction, BUILTIN_STRINGS_LIST, BoundFunction,
+        Array, ArrayIterator, AsyncGenerator, AwaitReaction, BoundFunction,
         BuiltinConstructorFunction, BuiltinFunction, BuiltinPromiseFinallyFunction,
         BuiltinPromiseResolvingFunction, DeclarativeEnvironment, ECMAScriptFunction,
         EmbedderObject, Error, FinalizationRegistry, FunctionEnvironment, Generator,
@@ -572,7 +572,6 @@ pub(crate) struct WorkQueues<'a> {
     pub(crate) shared_typed_arrays: Vec<SharedVoidArray<'static>>,
     pub(crate) source_text_module_records: Vec<SourceTextModule<'static>>,
     pub(crate) string_iterators: Vec<StringIterator<'static>>,
-    pub(crate) strings: Vec<HeapString<'static>>,
     pub(crate) symbols: Vec<Symbol<'static>>,
     #[cfg(feature = "array-buffer")]
     pub(crate) typed_arrays: Vec<VoidArray<'static>>,
@@ -1105,7 +1104,6 @@ impl<'a> WorkQueues<'a> {
                 heap.source_text_module_records.len() / 4,
             ),
             string_iterators: Vec::with_capacity(heap.string_iterators.len() / 4),
-            strings: Vec::with_capacity((heap.strings.len() / 4).max(BUILTIN_STRINGS_LIST.len())),
             symbols: Vec::with_capacity((heap.symbols.len() / 4).max(13)),
             #[cfg(feature = "array-buffer")]
             typed_arrays: Vec::with_capacity(heap.typed_arrays.len() / 4),
@@ -1115,6 +1113,18 @@ impl<'a> WorkQueues<'a> {
             weak_refs: Vec::with_capacity(heap.weak_refs.len() / 4),
             #[cfg(feature = "weak-refs")]
             weak_sets: Vec::with_capacity(heap.weak_sets.len() / 4),
+        }
+    }
+
+    #[inline]
+    pub(crate) fn mark_string(&self, string: HeapString<'static>) {
+        // Strings have no outgoing heap references. Mark them at discovery and
+        // skip the atomic write for already marked strings (including builtins).
+        let index = string.get_index();
+        debug_assert!(index < self.bits.strings.len());
+        let bits = &self.bits.bits;
+        if !self.bits.strings.get_bit(index, bits) {
+            self.bits.strings.set_bit(index, bits);
         }
     }
 
@@ -1211,7 +1221,6 @@ impl<'a> WorkQueues<'a> {
             shared_typed_arrays,
             source_text_module_records,
             string_iterators,
-            strings,
             symbols,
             #[cfg(feature = "array-buffer")]
             typed_arrays,
@@ -1332,7 +1341,6 @@ impl<'a> WorkQueues<'a> {
             && shared_typed_arrays.is_empty()
             && source_text_module_records.is_empty()
             && string_iterators.is_empty()
-            && strings.is_empty()
             && symbols.is_empty()
             && typed_arrays.is_empty()
             && weak_maps.is_empty()

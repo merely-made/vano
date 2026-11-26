@@ -9,6 +9,8 @@ use wtf8::{CodePoint, Wtf8, Wtf8Buf};
 
 use crate::heap::{CompactionLists, HeapMarkAndSweep, WorkQueues};
 
+// HeapString marks its own bit at discovery, relying on this record having
+// no outgoing GC references.
 #[derive(Debug, Clone)]
 pub(crate) struct StringRecord {
     pub(crate) data: StringBuffer,
