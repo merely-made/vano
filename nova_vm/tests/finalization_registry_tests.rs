@@ -58,7 +58,8 @@ fn cleaned_up(count: usize) -> f64 {
         loop {
             let job = hooks.jobs.borrow_mut().pop_front();
             let Some(job) = job else { break };
-            job.run(agent, gc.reborrow()).expect("cleanup job should complete");
+            job.run(agent, gc.reborrow())
+                .expect("cleanup job should complete");
         }
         let source = JsString::from_static_str(agent, "held.length", gc.nogc()).unbind();
         match agent.run_script(source, gc).expect("count should evaluate") {
@@ -71,6 +72,10 @@ fn cleaned_up(count: usize) -> f64 {
 #[test]
 fn every_dead_cell_reaches_the_cleanup_callback() {
     for count in 1..=4 {
-        assert_eq!(cleaned_up(count), count as f64, "{count} cells died together");
+        assert_eq!(
+            cleaned_up(count),
+            count as f64,
+            "{count} cells died together"
+        );
     }
 }
