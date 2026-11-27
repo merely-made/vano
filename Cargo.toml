@@ -52,9 +52,9 @@ rand = "0.10.3"
 regex = "1.13.1"
 # Genet fork: Nova's RegExp matcher uses regress (the ECMAScript-spec backtracking
 # engine) instead of the `regex` crate, which cannot do lookahead/lookbehind/
-# backreferences. Kept on the version Boa uses in the Genet workspace so the
+# backreferences. Kept on the version the rest of the stack holds (0.12) so the
 # ecosystem shares one regress.
-regress = { version = "0.11.1", features = ["utf16"] }
+regress = { version = ">=0.12", features = ["utf16"] }
 ryu-js = "1.0.3"
 soavec = "0.2.0"
 soavec_derive = "0.2.0"
